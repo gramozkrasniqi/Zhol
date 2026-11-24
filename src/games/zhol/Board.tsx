@@ -242,7 +242,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
 
       {/* Card that follows the finger while dragging */}
       {drag?.moved && (
-        <div className="ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+        <div className="drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
           {drag.kind === "stock" ? <Back /> : <CardView c={drag.card!} />}
         </div>
       )}
