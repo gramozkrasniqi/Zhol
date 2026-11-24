@@ -32,7 +32,7 @@ export function Rules({ onExit, onTutorial }: { onExit: () => void; onTutorial: 
         </ol>
 
         <h3>Två varianter</h3>
-        <p><b>Zhol i vogël</b> (lilla): 7 kort, alltid en grupp med 3 och en med 4. <b>Zhol i madh</b> (stora): 14 kort och två kortlekar. Vid fler än 4 spelare läggs en kortlek till.</p>
+        <p><b>Zhol i vogël</b> (lilla): 7 kort, alltid en grupp med 3 och en med 4. <b>Zhol i madh</b> (stora): 10 kort (11 under din tur) och två kortlekar. Alla kort ska ligga i grupper om minst 3. Vid fler än 4 spelare läggs en kortlek till.</p>
 
         <h3>Tid, Elo och Lek</h3>
         <p>Du har 45 sekunder per tur. Missar du två turer i rad förlorar du rundan. Snabbmatcher är rankade och ger Elo. Lek är låtsasmarker utan värde i pengar.</p>

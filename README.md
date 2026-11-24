@@ -5,7 +5,7 @@ Albanska kortspelet zhol online: spela med vänner via bordskod eller rankat mot
 ## Vad som finns (version 0.1)
 
 - **Plattform för flera spel**: varje spel är en modul i `supabase/functions/_shared/games/` (regler) och `src/games/` (bordsvy). Ranking och topplista per spel.
-- **Zhol** (`supabase/functions/_shared/games/zhol.ts`): Zhol i vogël (7 kort, 3+4) och Zhol i madh (2 lekar, 14 kort, grupper om minst 3), xhola, set och stegar (A låg eller hög, ingen K-A-2). Samma kod körs på servern och i appen. 15 tester.
+- **Zhol** (`supabase/functions/_shared/games/zhol.ts`): Zhol i vogël (7 kort, 3+4) och Zhol i madh (2 lekar, 10 kort, grupper om minst 3), xhola, set och stegar (A låg eller hög, ingen K-A-2). Samma kod körs på servern och i appen. 15 tester.
 - **Server** (`supabase/functions/game`): alla drag kontrolleras på servern. Ingen kan se andras kort eller fuska med en ändrad app.
 - **Databas** (`supabase/migrations`): profiler med Elo, bord, spel, dolda händer (RLS) och Elo-historik.
 - **Botar och större bord:** 2, 4, 6 eller 8 spelare. Vid fler än 4 spelare används en extra kortlek. "Spela mot botar" startar direkt, och snabbmatch fylls med botar efter 20 sekunder. Botspel är gratis och orankat, och botar syns aldrig i topplistan.

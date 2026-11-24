@@ -212,7 +212,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const small = pub.variant === "small";
   const analysis = useMemo(() => analyseHand(hand, small), [hand, small]);
   const ready = useMemo(() => new Set(analysis.done.flat().map((c) => c.id)), [analysis]);
-  const needed = small ? 7 : 14;
+  const needed = small ? 7 : 10;
   const inGroups = Math.min(needed, ready.size);
 
   /* ---------- Rules for what the player may do now ---------- */

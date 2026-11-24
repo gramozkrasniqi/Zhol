@@ -39,8 +39,8 @@ describe("grupplösare", () => {
 describe("drag", () => {
   it("delar ut rätt antal kort", () => {
     const g = newGame("big", 4);
-    expect(g.hands.every((h) => h.length === 14)).toBe(true);
-    expect(g.stock.length + g.discard.length + 56).toBe(108);
+    expect(g.hands.every((h) => h.length === 10)).toBe(true);
+    expect(g.stock.length + g.discard.length + 40).toBe(108);
   });
   it("tur, ta, kasta, förbjudet att kasta taget kort", () => {
     let g = newGame("small", 2);
@@ -126,7 +126,7 @@ describe("tidsgräns och avhopp", () => {
 describe("större bord och botar", () => {
   it("6 och 8 spelare får en extra kortlek", () => {
     const g = GAMES.zhol;
-    for (const [v, n, hand] of [["small", 8, 7], ["big", 8, 14], ["small", 6, 7], ["big", 6, 14]] as const) {
+    for (const [v, n, hand] of [["small", 8, 7], ["big", 8, 10], ["small", 6, 7], ["big", 6, 10]] as const) {
       const s = g.newGame(v, n, 0);
       expect(s.hands).toHaveLength(n);
       expect(s.hands.every((h: Card[]) => h.length === hand)).toBe(true);

@@ -30,7 +30,7 @@ export type Action =
   | { type: "discard"; cardId: number }
   | { type: "zhol" };
 
-export const HAND_SIZE: Record<Variant, number> = { small: 7, big: 14 };
+export const HAND_SIZE: Record<Variant, number> = { small: 7, big: 10 };
 
 export function shuffle<T>(a: T[], rnd: () => number = Math.random): T[] {
   for (let i = a.length - 1; i > 0; i--) {
@@ -216,7 +216,7 @@ export const zhol: GameModule<GameState, Action, PublicState, Card[]> = {
   name: "Zhol",
   variants: [
     { id: "small", label: "Zhol i vogël · 7 kort" },
-    { id: "big", label: "Zhol i madh · 14 kort" },
+    { id: "big", label: "Zhol i madh · 10 kort" },
   ],
   seatOptions: [2, 4, 6, 8],
   newGame: (variant, seats, starter) => {
