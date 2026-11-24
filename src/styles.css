@@ -65,3 +65,66 @@ button[disabled]{opacity:.4;cursor:default}
 .daily{min-height:52px}
 .center{text-align:center}
 .ghost.big{min-height:56px;font-size:18px}
+
+/* ---------- Pokerbord ---------- */
+.room{--gold:#f2c14e;background:radial-gradient(ellipse at 50% 30%,#1c2a24 0%,#0c1210 70%);border-radius:24px;padding:clamp(10px,2.5vw,22px) clamp(6px,2vw,18px) 18px;color:#fff;box-shadow:0 20px 50px -24px #000}
+.poker{--rx:43%;--ry:43%;position:relative;width:100%;aspect-ratio:16/9;max-height:64vh;margin:0 auto}
+.rail{position:absolute;inset:11% 8%;border-radius:50%;padding:clamp(8px,1.6vw,16px);
+  background:linear-gradient(160deg,#7a4b28 0%,#4a2b15 45%,#2c180b 100%);
+  box-shadow:0 18px 40px -10px #000c,inset 0 2px 0 #ffffff30,inset 0 -3px 6px #0008}
+.felt{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(ellipse at 50% 40%,#2c8a5a 0%,#17643f 45%,#0d4329 100%);
+  box-shadow:inset 0 0 0 2px #ffffff14,inset 0 10px 40px #0007}
+.center{display:flex;flex-direction:column;align-items:center;gap:8px}
+.piles{--cw:clamp(44px,8vw,70px);display:flex;gap:clamp(10px,2vw,18px);align-items:flex-end}
+.piles .pile span:last-child{font-size:12px;color:#d8efe2}
+.room .status{margin:0;min-height:0;padding:4px 12px;border-radius:999px;background:#00000059;font-size:14px;font-weight:600;text-align:center}
+.room .status.mine{color:var(--gold);background:#0008}
+.pot{display:flex;align-items:center;gap:6px;font-weight:800;color:var(--gold);font-size:15px}
+.pot i{width:16px;height:16px;border-radius:50%;background:#c0182b;border:3px dashed #fff;box-sizing:border-box}
+.felt .groups{--cw:clamp(26px,5vw,42px);margin:0;max-width:80%}
+.felt .groups>div{background:#00000040}
+
+.seat{position:absolute;left:calc(50% + var(--c) * var(--rx));top:calc(50% + var(--s) * var(--ry));transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;width:96px;z-index:2}
+.avatar{--p:0deg;position:relative;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;
+  background:linear-gradient(160deg,#3a404b,#15181d);font-weight:800;font-size:21px;
+  box-shadow:0 0 0 3px #4a505b,0 6px 14px #000a}
+.seat.me .avatar{background:linear-gradient(160deg,#c0182b,#5e0a14)}
+.seat.active .avatar{box-shadow:0 0 0 3px var(--gold),0 0 22px #f2c14e88}
+.seat.active .avatar::before{content:'';position:absolute;inset:-8px;border-radius:50%;
+  background:conic-gradient(var(--gold) var(--p),#ffffff1f 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));transition:background .9s linear}
+.seat.won .avatar{box-shadow:0 0 0 3px var(--gold),0 0 30px var(--gold)}
+.secs{position:absolute;right:-10px;bottom:-4px;min-width:24px;height:24px;padding:0 5px;border-radius:12px;background:var(--gold);color:#111;font-size:12px;display:grid;place-items:center}
+.plate{margin-top:-8px;min-width:84px;max-width:110px;padding:4px 8px 3px;border-radius:10px;background:#0b0d10ee;border:1px solid #ffffff22;text-align:center;line-height:1.2;position:relative;z-index:1}
+.plate .nm{display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plate .nm em{font-style:normal;font-size:9px;font-weight:800;background:#ffffff26;border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:2px}
+.plate .meta{display:block;font-size:11px;color:#c3c9d1}
+.seat.active .plate{border-color:var(--gold)}
+.minicards{position:absolute;top:2px;left:calc(50% + 22px);display:flex}
+.minicards i{width:12px;height:17px;border-radius:2px;margin-left:-7px;border:1.5px solid #fff;background:repeating-linear-gradient(45deg,#b3101f 0 3px,#8a0b17 3px 6px);transform:rotate(calc(var(--r,0) * 1deg))}
+.minicards i:nth-child(1){--r:-14}.minicards i:nth-child(2){--r:-6}.minicards i:nth-child(3){--r:2}.minicards i:nth-child(4){--r:10}.minicards i:nth-child(5){--r:18}
+.seat.me .plate{background:#2a070c;border-color:#ff6b7a66}
+
+.room .hand{--cw:clamp(48px,11.5vw,76px);display:flex;justify-content:center;flex-wrap:nowrap;gap:0;padding:16px 4px 4px;margin-top:4px}
+.room .hand .card+.card{margin-left:clamp(calc(var(--cw) * -0.68), calc((100% - var(--n) * var(--cw)) / (var(--n) - 1)), 6px)}
+.room .hand .card{box-shadow:-3px 4px 10px #0009}
+.room .acts button{background:#ffffff1a;color:#fff;border:1px solid #ffffff1f}
+.room .acts .main{background:#fff;color:var(--deep);border:0}
+.room .acts .zhol{background:var(--red);border:0}
+
+/* Mobil: högt bord så att alla platser får plats */
+@media(max-width:640px){
+  .poker{aspect-ratio:3/4;max-height:none;--rx:38%;--ry:44%}
+  .rail{inset:9% 15%}
+  .seat{width:78px}
+  .avatar{width:44px;height:44px;font-size:17px}
+  .plate{min-width:70px;padding:3px 6px 2px}
+  .plate .nm{font-size:12px}
+  .minicards{display:none}
+}
+.room[data-seats="8"] .avatar,.room[data-seats="6"] .avatar{width:46px;height:46px;font-size:18px}
+@media(max-width:640px){.room[data-seats="8"] .avatar,.room[data-seats="6"] .avatar{width:40px;height:40px;font-size:16px}.room[data-seats="8"] .seat{width:72px}}
+@media(prefers-reduced-motion:reduce){.seat.active .avatar::before{transition:none}}

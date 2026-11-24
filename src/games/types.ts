@@ -13,6 +13,11 @@ export interface BoardProps<P = unknown, H = unknown, A = unknown> {
   nextRound: () => void;
   /** True when the platform ended the game (someone gave up or timed out); the board just shows it. */
   ended?: boolean;
+  /** Seconds left for the player whose turn it is, and the full turn length. */
+  timeLeft?: number | null;
+  turnSeconds?: number;
+  /** Chips in the pot, if the table has a stake. */
+  pot?: number;
 }
 
 export interface GameUI {

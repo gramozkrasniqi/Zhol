@@ -116,7 +116,6 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
   const nameOf = (seat: number) => (seat === mySeat ? "Du" : seats.find((s) => s.seat === seat)?.username ?? "…");
   const running = !game.finished_at;
   const left = game.turn_deadline ? Math.max(0, Math.ceil((new Date(game.turn_deadline).getTime() - now) / 1000)) : null;
-  const turnSeat = game.public.turn;
   const forfeit = game.outcome?.type === "forfeit" ? game.outcome : null;
 
   return (
@@ -128,13 +127,6 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
           : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}
       </header>
-      {running && left !== null && turnSeat !== undefined && (
-        <div className={`timer ${left <= 10 ? "low" : ""}`} role="timer" aria-live="off">
-          <span>{turnSeat === mySeat ? "Din tur" : `Tur: ${nameOf(turnSeat)}`}</span>
-          <span className="bar-track"><span style={{ width: `${(left / TURN_SECONDS) * 100}%` }} /></span>
-          <b>{left} s</b>
-        </div>
-      )}
       {forfeit && (
         <div className="panel row banner">
           <span>
@@ -144,7 +136,8 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           <button className="primary" onClick={nextRound}>Ny runda</button>
         </div>
       )}
-      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit} />
+      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
+          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}
     </>

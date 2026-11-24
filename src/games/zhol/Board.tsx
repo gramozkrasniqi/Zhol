@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { findWin, type Action, type Card, type PublicState } from "../../../supabase/functions/_shared/games/zhol";
 import type { BoardProps } from "../types";
 import { Back, CardView } from "./Card";
 
-export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended }: BoardProps<PublicState, Card[], Action>) {
+/** Where a seat sits around the oval, in % of the table. The player is always at the bottom. */
+function seatPosition(offset: number, total: number): CSSProperties {
+  const angle = Math.PI / 2 + (offset * 2 * Math.PI) / total; // 90° = bottom, clockwise
+  // The radius lives in CSS (--rx/--ry) so it can shrink on narrow screens
+  return { "--c": Math.cos(angle).toFixed(3), "--s": Math.sin(angle).toFixed(3) } as CSSProperties;
+}
+
+export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended, timeLeft, turnSeconds = 45, pot }: BoardProps<PublicState, Card[], Action>) {
   const [order, setOrder] = useState<number[]>([]);
   const [sel, setSel] = useState<number | null>(null);
 
@@ -18,10 +25,12 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   }, [hand]);
   const sorted = useMemo(() => order.map((id) => hand.find((c) => c.id === id)!).filter(Boolean), [order, hand]);
 
-  const myTurn = !ended && pub.phase !== "over" && pub.turn === mySeat;
+  const over = ended || pub.phase === "over";
+  const myTurn = !over && pub.turn === mySeat;
   const canWin = myTurn && pub.phase === "discard" && !!findWin(hand, pub.taken, pub.variant === "small");
   const name = (seat: number) => seats.find((s) => s.seat === seat)?.username ?? "…";
   const drawOpen = myTurn && pub.phase === "draw" && !busy;
+  const newest = myTurn && pub.phase === "discard" ? sorted[sorted.length - 1]?.id : undefined;
 
   function sortBy(k: "s" | "r") {
     const hi = (r: number) => (r === 1 ? 14 : r);
@@ -40,48 +49,74 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     else setSel(sel === c.id ? null : c.id);
   }
 
-  const status = ended ? "Partiet är slut." : pub.phase === "over"
-    ? pub.winner === -1 ? "Högen tog slut – oavgjort." : pub.winner === mySeat ? "Zhol! Du vann." : `${name(pub.winner!)} gjorde Zhol.`
-    : myTurn
-      ? pub.phase === "draw" ? "Din tur – ta från högen eller kasthögen." : canWin ? "Du har Zhol! Tryck på knappen." : "Välj ett kort att kasta."
-      : `${name(pub.turn)} spelar…`;
+  const status = ended ? "Partiet är slut."
+    : pub.phase === "over"
+      ? pub.winner === -1 ? "Högen tog slut – oavgjort." : pub.winner === mySeat ? "Zhol! Du vann." : `${name(pub.winner!)} gjorde Zhol.`
+      : myTurn
+        ? pub.phase === "draw" ? "Din tur – ta ett kort" : canWin ? "Du har Zhol!" : "Välj ett kort att kasta"
+        : `${name(pub.turn)} spelar…`;
+
+  const total = pub.seats;
+  const ring = (seat: number): CSSProperties | undefined =>
+    !over && pub.turn === seat && timeLeft != null
+      ? ({ "--p": `${Math.max(0, Math.min(1, timeLeft / turnSeconds)) * 360}deg` } as CSSProperties)
+      : undefined;
 
   return (
-    <section className="table">
-      <div className="opps">
-        {seats.filter((s) => s.seat !== mySeat).map((s) => (
-          <div key={s.seat} className={`opp ${pub.turn === s.seat && pub.phase !== "over" ? "on" : ""}`}>
-            <b>{s.username}</b><span className="muted">{s.elo}</span>
-            <span className="backs">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 8) }, (_, i) => <i key={i} />)}</span>
-            <span>{pub.handCounts[s.seat]}</span>
+    <section className="room" data-seats={total}>
+      <div className="poker">
+        <div className="rail"><div className="felt">
+          <div className="center">
+            {pub.phase === "over" && pub.winGroups ? (
+              <div className="groups">{pub.winGroups.map((g, i) => <div key={i}>{g.map((c) => <CardView key={c.id} c={c} />)}</div>)}</div>
+            ) : (
+              <div className="piles">
+                <button className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} onClick={() => act({ type: "draw", from: "stock" })} aria-label={`Högen, ${pub.stockCount} kort`}>
+                  <Back label={pub.stockCount} /><span>Högen</span>
+                </button>
+                <button className={`pile ${drawOpen && pub.discardTop ? "go" : ""}`} disabled={!drawOpen || !pub.discardTop} onClick={() => act({ type: "draw", from: "discard" })} aria-label="Kasthögen">
+                  {pub.discardTop ? <CardView c={pub.discardTop} /> : <span className="empty" />}<span>Kastat</span>
+                </button>
+              </div>
+            )}
+            <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>
+            {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")}</div> : null}
           </div>
-        ))}
-      </div>
-      <div className="mid">
-        <button className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} onClick={() => act({ type: "draw", from: "stock" })}>
-          <Back label={pub.stockCount} />Högen
-        </button>
-        <button className={`pile ${drawOpen && pub.discardTop ? "go" : ""}`} disabled={!drawOpen || !pub.discardTop} onClick={() => act({ type: "draw", from: "discard" })}>
-          {pub.discardTop ? <CardView c={pub.discardTop} /> : <span className="empty" />}Kastat
-        </button>
-      </div>
-      <div className="status" aria-live="polite">{status}</div>
+        </div></div>
 
-      {pub.phase === "over" && pub.winGroups && (
-        <div className="groups">{pub.winGroups.map((g, i) => <div key={i}>{g.map((c) => <CardView key={c.id} c={c} />)}</div>)}</div>
-      )}
+        {seats.map((s) => {
+          const offset = (s.seat - mySeat + total) % total;
+          const active = !over && pub.turn === s.seat;
+          const won = pub.phase === "over" && pub.winner === s.seat;
+          const isBot = s.username.endsWith("(bot)");
+          const label = isBot ? s.username.replace(" (bot)", "") : s.username;
+          return (
+            <div key={s.seat} className={`seat ${offset === 0 ? "me" : ""} ${active ? "active" : ""} ${won ? "won" : ""}`} style={seatPosition(offset, total)}>
+              <div className="avatar" style={ring(s.seat)}>
+                <span>{label.slice(0, 1).toUpperCase()}</span>
+                {active && timeLeft != null && <b className="secs">{timeLeft}</b>}
+              </div>
+              <div className="plate">
+                <span className="nm">{offset === 0 ? "Du" : label}{isBot && <em>BOT</em>}</span>
+                <span className="meta">{s.elo} · {pub.handCounts[s.seat] ?? 0} kort</span>
+              </div>
+              {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
+            </div>
+          );
+        })}
+      </div>
 
-      <div className="hand">
+      <div className="hand" style={{ "--n": sorted.length } as CSSProperties}>
         {sorted.map((c) => (
-          <CardView key={c.id} c={c} selected={sel === c.id} fresh={myTurn && pub.phase === "discard" && c.id === sorted[sorted.length - 1]?.id} onClick={() => tap(c)} />
+          <CardView key={c.id} c={c} selected={sel === c.id} fresh={c.id === newest} onClick={() => tap(c)} />
         ))}
       </div>
       <div className="acts">
         <button disabled={sel == null} onClick={() => shift(-1)} aria-label="Flytta vänster">←</button>
         <button disabled={sel == null} onClick={() => shift(1)} aria-label="Flytta höger">→</button>
-        <button onClick={() => sortBy("s")}>Sortera färg</button>
-        <button onClick={() => sortBy("r")}>Sortera valör</button>
-        {pub.phase === "over"
+        <button onClick={() => sortBy("s")}>Färg</button>
+        <button onClick={() => sortBy("r")}>Valör</button>
+        {pub.phase === "over" && !ended
           ? <button className="main" onClick={nextRound}>Ny runda</button>
           : <>
               <button className="main" disabled={!myTurn || pub.phase !== "discard" || sel == null || sel === pub.taken || busy}
