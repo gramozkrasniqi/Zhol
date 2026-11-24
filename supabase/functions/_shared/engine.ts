@@ -1,0 +1,224 @@
+// Zhol – shared game engine. Runs both in the Supabase edge function (Deno)
+// and in the browser. Pure functions only, no imports.
+
+export type Variant = "small" | "big";
+export interface Card { id: number; r?: number; s?: number; j?: 1 }
+export type Phase = "draw" | "discard" | "over";
+
+export interface GameState {
+  variant: Variant;
+  seats: number;
+  stock: Card[];
+  discard: Card[];
+  hands: Card[][];
+  turn: number;
+  phase: Phase;
+  taken: number | null; // id of card just taken from the discard pile
+  winner: number | null; // seat index, or -1 for a draw
+  winGroups: Card[][] | null;
+  moves: number;
+}
+
+export type Action =
+  | { type: "draw"; from: "stock" | "discard" }
+  | { type: "discard"; cardId: number }
+  | { type: "zhol" };
+
+export const HAND_SIZE: Record<Variant, number> = { small: 7, big: 14 };
+
+export function shuffle<T>(a: T[], rnd: () => number = Math.random): T[] {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export function makeDeck(variant: Variant, rnd?: () => number): Card[] {
+  const d: Card[] = [];
+  let id = 0;
+  const decks = variant === "big" ? 2 : 1;
+  for (let k = 0; k < decks; k++) {
+    for (let s = 0; s < 4; s++) for (let r = 1; r <= 13; r++) d.push({ id: id++, r, s });
+    d.push({ id: id++, j: 1 }, { id: id++, j: 1 });
+  }
+  return shuffle(d, rnd);
+}
+
+export function newGame(variant: Variant, seats: number, starter = 0, rnd?: () => number): GameState {
+  if (seats < 2 || seats > 4) throw new Error("2–4 spelare");
+  const stock = makeDeck(variant, rnd);
+  const hands = Array.from({ length: seats }, () => stock.splice(0, HAND_SIZE[variant]));
+  const discard = [stock.pop()!];
+  return {
+    variant, seats, stock, discard, hands, turn: starter % seats, phase: "draw",
+    taken: null, winner: null, winGroups: null, moves: 0,
+  };
+}
+
+/* ---------- Group solver ---------- */
+// Splits cards into valid groups: sets (3–4 same rank, different suits) or
+// runs (3+ same suit in sequence, ace low or high, no wrap). Jokers stand in
+// for any card; every group needs at least one real card.
+// small = Zhol i vogël: groups of 3–4 only (7 cards ⇒ exactly 3+4).
+export function findGroups(cards: Card[], small: boolean): Card[][] | null {
+  return solve(cards.filter((c) => !c.j), cards.filter((c) => c.j), small);
+}
+
+function solve(real: Card[], J: Card[], small: boolean): Card[][] | null {
+  if (!real.length) return J.length ? null : [];
+  const c = real[0], rest = real.slice(1), maxRun = small ? 4 : 14;
+
+  // Sets containing c
+  const bySuit = new Map<number, Card>();
+  for (const x of rest) if (x.r === c.r && x.s !== c.s && !bySuit.has(x.s!)) bySuit.set(x.s!, x);
+  const opts = [...bySuit.values()];
+  for (let m = 0; m < 1 << opts.length; m++) {
+    const pick = opts.filter((_, i) => (m >> i) & 1), n = 1 + pick.length;
+    if (n > 4) continue;
+    for (let u = 0; u <= J.length && n + u <= 4; u++) {
+      if (n + u < 3) continue;
+      const ids = new Set(pick.map((p) => p.id));
+      const r = solve(rest.filter((x) => !ids.has(x.id)), J.slice(u), small);
+      if (r) return [[c, ...pick, ...J.slice(0, u)], ...r];
+    }
+  }
+
+  // Runs containing c
+  const vals = c.r === 1 ? [1, 14] : [c.r!];
+  for (const v of vals)
+    for (let st = Math.max(1, v - maxRun + 1); st <= v; st++)
+      for (let len = 3; len <= maxRun; len++) {
+        const en = st + len - 1;
+        if (en > 14 || en < v) continue;
+        const res = fill(st, en, v, c, rest, J, [], small);
+        if (res) return res;
+      }
+  return null;
+}
+
+function fill(p: number, en: number, v: number, c: Card, pool: Card[], J: Card[], grp: Card[], small: boolean): Card[][] | null {
+  if (p > en) {
+    const r = solve(pool, J, small);
+    return r ? [grp, ...r] : null;
+  }
+  if (p === v) return fill(p + 1, en, v, c, pool, J, [...grp, c], small);
+  const rk = p === 14 ? 1 : p;
+  const k = pool.findIndex((x) => x.s === c.s && x.r === rk);
+  if (k >= 0) {
+    const r = fill(p + 1, en, v, c, pool.filter((_, i) => i !== k), J, [...grp, pool[k]], small);
+    if (r) return r;
+  }
+  if (J.length) {
+    const r = fill(p + 1, en, v, c, pool, J.slice(1), [...grp, J[0]], small);
+    if (r) return r;
+  }
+  return null;
+}
+
+/** With a hand of HAND_SIZE+1 cards: which discard (if any) completes the hand? */
+export function findWin(hand: Card[], taken: number | null, small: boolean): { discard: Card; groups: Card[][] } | null {
+  for (let i = hand.length - 1; i >= 0; i--) {
+    if (hand[i].id === taken) continue;
+    const g = findGroups(hand.filter((_, k) => k !== i), small);
+    if (g) return { discard: hand[i], groups: g };
+  }
+  return null;
+}
+
+/* ---------- Moves ---------- */
+export class MoveError extends Error {}
+
+/** Applies a move for `seat`. Returns a new state; throws MoveError if illegal. */
+export function applyAction(prev: GameState, seat: number, a: Action, rnd?: () => number): GameState {
+  const s: GameState = structuredClone(prev);
+  if (s.phase === "over") throw new MoveError("Spelet är slut");
+  if (s.turn !== seat) throw new MoveError("Inte din tur");
+  const hand = s.hands[seat];
+
+  if (a.type === "draw") {
+    if (s.phase !== "draw") throw new MoveError("Du har redan tagit ett kort");
+    let c: Card | undefined;
+    if (a.from === "discard") {
+      c = s.discard.pop();
+      if (!c) throw new MoveError("Kasthögen är tom");
+      s.taken = c.id;
+    } else {
+      if (!s.stock.length) {
+        const top = s.discard.pop();
+        s.stock = shuffle(s.discard, rnd);
+        s.discard = top ? [top] : [];
+      }
+      c = s.stock.pop();
+      if (!c) { s.phase = "over"; s.winner = -1; return s; }
+      s.taken = null;
+    }
+    hand.push(c);
+    s.phase = "discard";
+  } else if (a.type === "discard") {
+    if (s.phase !== "discard") throw new MoveError("Ta ett kort först");
+    if (a.cardId === s.taken) throw new MoveError("Kortet du just tog får inte kastas direkt");
+    const i = hand.findIndex((c) => c.id === a.cardId);
+    if (i < 0) throw new MoveError("Kortet finns inte i din hand");
+    s.discard.push(hand.splice(i, 1)[0]);
+    s.turn = (s.turn + 1) % s.seats;
+    s.phase = "draw";
+    s.taken = null;
+  } else if (a.type === "zhol") {
+    if (s.phase !== "discard") throw new MoveError("Ta ett kort först");
+    const w = findWin(hand, s.taken, s.variant === "small");
+    if (!w) throw new MoveError("Handen går inte ihop än");
+    hand.splice(hand.indexOf(w.discard), 1);
+    s.discard.push(w.discard);
+    s.phase = "over";
+    s.winner = seat;
+    s.winGroups = w.groups;
+  } else throw new MoveError("Okänt drag");
+
+  s.moves++;
+  return s;
+}
+
+/* ---------- What each player may see ---------- */
+export interface PublicState {
+  variant: Variant; seats: number; turn: number; phase: Phase;
+  discardTop: Card | null; discardCount: number; stockCount: number;
+  handCounts: number[]; taken: number | null; winner: number | null;
+  winGroups: Card[][] | null; moves: number;
+}
+export function publicView(s: GameState): PublicState {
+  return {
+    variant: s.variant, seats: s.seats, turn: s.turn, phase: s.phase,
+    discardTop: s.discard[s.discard.length - 1] ?? null, discardCount: s.discard.length,
+    stockCount: s.stock.length, handCounts: s.hands.map((h) => h.length),
+    taken: s.taken, winner: s.winner, winGroups: s.winGroups, moves: s.moves,
+  };
+}
+
+/* ---------- Rating ---------- */
+export const K_FACTOR = 32;
+/** Elo change for each seat. Multiplayer: winner beat every other player pairwise. */
+export function eloDeltas(ratings: number[], winner: number): number[] {
+  const d = ratings.map(() => 0);
+  if (winner < 0) return d;
+  const k = K_FACTOR / Math.max(1, ratings.length - 1);
+  for (let i = 0; i < ratings.length; i++) {
+    if (i === winner) continue;
+    const exp = 1 / (1 + 10 ** ((ratings[i] - ratings[winner]) / 400));
+    const ch = Math.round(k * (1 - exp));
+    d[winner] += ch;
+    d[i] -= ch;
+  }
+  return d;
+}
+
+export const LEAGUES = [
+  { name: "Brons", min: 0 },
+  { name: "Silver", min: 1100 },
+  { name: "Guld", min: 1300 },
+  { name: "Platina", min: 1500 },
+  { name: "Diamant", min: 1700 },
+] as const;
+export function leagueOf(elo: number) {
+  return [...LEAGUES].reverse().find((l) => elo >= l.min)!.name;
+}

@@ -1,0 +1,20 @@
+import type { Card } from "../supabase/functions/_shared/engine";
+
+const SU = ["♠︎", "♥︎", "♦︎", "♣︎"];
+const NAMES = ["spathi", "kupa", "karo", "maç"];
+export const rankLabel = (r: number) => ({ 1: "A", 11: "J", 12: "Q", 13: "K" } as Record<number, string>)[r] ?? String(r);
+
+export function CardView({ c, selected, fresh, onClick }: { c: Card; selected?: boolean; fresh?: boolean; onClick?: () => void }) {
+  const cls = ["card", c.j ? "jk" : c.s === 1 || c.s === 2 ? "red" : "", selected ? "sel" : "", fresh ? "new" : ""].join(" ");
+  const label = c.j ? "Xhol" : `${rankLabel(c.r!)} ${NAMES[c.s!]}`;
+  const inner = c.j
+    ? <><span className="tl">XHOL</span><span className="c">★</span></>
+    : <><span className="tl">{rankLabel(c.r!)}<b>{SU[c.s!]}</b></span><span className="c">{SU[c.s!]}</span></>;
+  return onClick
+    ? <button className={cls} aria-label={label} aria-pressed={selected} onClick={onClick}>{inner}</button>
+    : <span className={cls} aria-label={label}>{inner}</span>;
+}
+
+export function Back({ label }: { label?: string | number }) {
+  return <span className="back">{label}</span>;
+}
