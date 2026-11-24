@@ -128,3 +128,14 @@ button[disabled]{opacity:.4;cursor:default}
 .room[data-seats="8"] .avatar,.room[data-seats="6"] .avatar{width:46px;height:46px;font-size:18px}
 @media(max-width:640px){.room[data-seats="8"] .avatar,.room[data-seats="6"] .avatar{width:40px;height:40px;font-size:16px}.room[data-seats="8"] .seat{width:72px}}
 @media(prefers-reduced-motion:reduce){.seat.active .avatar::before{transition:none}}
+
+/* Kompakt rad ovanför bordet */
+.bar{flex-wrap:nowrap}
+.bar>.muted{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.bar>.ghost,.bar>.row{flex:none}
+.plate .meta{white-space:nowrap}
+@media(max-width:640px){
+  .plate .elo{display:none}
+  .room .hand{padding-top:22px}
+  .bar>.ghost{padding:0 12px}
+}

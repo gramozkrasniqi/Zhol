@@ -98,7 +98,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
               </div>
               <div className="plate">
                 <span className="nm">{offset === 0 ? "Du" : label}{isBot && <em>BOT</em>}</span>
-                <span className="meta">{s.elo} · {pub.handCounts[s.seat] ?? 0} kort</span>
+                <span className="meta"><span className="elo">{s.elo} · </span>{pub.handCounts[s.seat] ?? 0} kort</span>
               </div>
               {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
             </div>
