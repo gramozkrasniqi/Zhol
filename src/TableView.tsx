@@ -160,7 +160,8 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
         </div>
       )}
       {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
-          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} bubbles={bubbles} />
+          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} bubbles={bubbles}
+          ranked={table.ranked} onLeave={leave} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}
     </>

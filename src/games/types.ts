@@ -20,6 +20,10 @@ export interface BoardProps<P = unknown, H = unknown, A = unknown> {
   pot?: number;
   /** Latest chat line per seat, shown as a speech bubble for a few seconds. */
   bubbles?: Record<number, string>;
+  /** Ranked table (Elo changes are shown at the end). */
+  ranked?: boolean;
+  /** Back to the lobby. */
+  onLeave?: () => void;
 }
 
 export interface GameUI {

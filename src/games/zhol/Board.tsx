@@ -3,7 +3,8 @@ import { findWin, type Action, type Card, type LogEntry, type PublicState } from
 import type { BoardProps } from "../types";
 import { Back, CardView } from "./Card";
 import { AvatarFace } from "../../Avatar";
-import { smartGroups, sortRank, sortSuit } from "./sortHand";
+import { analyseHand, smartGroups, sortRank, sortSuit } from "./sortHand";
+import { Finale } from "./Finale";
 import { cardSound, setSound, soundOn } from "./sound";
 
 /** Where a seat sits around the oval. The player is always at the bottom; the radius lives in CSS. */
@@ -25,7 +26,13 @@ const pileShift = (id: number) => ((id * 53) % 9) - 4;
 const inside = (r: DOMRect | undefined, x: number, y: number, pad = 12) =>
   !!r && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 
-export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended, timeLeft, turnSeconds = 45, pot, bubbles = {} }: BoardProps<PublicState, Card[], Action>) {
+const SORTS = [
+  { id: "smart", label: "Grupper" },
+  { id: "rank", label: "Nummer" },
+  { id: "suit", label: "Färg" },
+] as const;
+
+export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended, timeLeft, turnSeconds = 45, pot, bubbles = {}, ranked, onLeave }: BoardProps<PublicState, Card[], Action>) {
   const [order, setOrder] = useState<number[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -195,6 +202,19 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     before.current = new Map();
   }, [order, breaks]);
 
+  // Elo before the round, to show the change when it ends
+  const eloBefore = useRef(new Map<number, number>());
+  useEffect(() => {
+    if (pub.phase !== "over") eloBefore.current = new Map(seats.map((x) => [x.seat, x.elo]));
+  }, [seats, pub.phase]);
+
+  /* ---------- How close the hand is to Zhol ---------- */
+  const small = pub.variant === "small";
+  const analysis = useMemo(() => analyseHand(hand, small), [hand, small]);
+  const ready = useMemo(() => new Set(analysis.done.flat().map((c) => c.id)), [analysis]);
+  const needed = small ? 7 : 14;
+  const inGroups = Math.min(needed, ready.size);
+
   /* ---------- Rules for what the player may do now ---------- */
   const over = ended || pub.phase === "over";
   const myTurn = !over && pub.turn === mySeat;
@@ -208,6 +228,12 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     lastCardRect.current = cardRefs.current.get(id)?.getBoundingClientRect() ?? null;
     act({ type: "discard", cardId: id });
     setSel(null);
+  }
+  const [sortIdx, setSortIdx] = useState(-1);
+  function cycleSort() {
+    const i = (sortIdx + 1) % SORTS.length;
+    setSortIdx(i);
+    sortBy(SORTS[i].id);
   }
   function sortBy(k: "suit" | "rank" | "smart") {
     rememberPositions();
@@ -226,11 +252,6 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     o.splice(target, 0, id);
     setOrder(o);
     setBreaks(new Set());
-  }
-  function shift(d: number) {
-    const i = order.indexOf(sel!);
-    if (i < 0 || i + d < 0 || i + d >= order.length) return;
-    moveTo(sel!, i + d);
   }
   function tap(c: Card) {
     if (suppressClick.current) { suppressClick.current = false; return; }
@@ -296,9 +317,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
       <div className="poker">
         <div className="rail"><div className="felt">
           <div className="center">
-            {pub.phase === "over" && pub.winGroups ? (
-              <div className="groups">{pub.winGroups.map((g, i) => <div key={i}>{g.map((c) => <CardView key={c.id} c={c} />)}</div>)}</div>
-            ) : (
+            {pub.phase === "over" && pub.winGroups ? null : (
               <div className="piles">
                 <button ref={stockRef} className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} aria-label={`Högen, ${pub.stockCount} kort`}
                   onClick={() => { if (!suppressClick.current) act({ type: "draw", from: "stock" }); }}
@@ -324,7 +343,9 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                 </button>
               </div>
             )}
-            <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>
+            {canWin && !busy
+              ? <button className="zhol-call" onClick={() => act({ type: "zhol" })}>Zhol!</button>
+              : <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>}
             {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")} Lek</div> : null}
           </div>
         </div></div>
@@ -353,35 +374,34 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
             </div>
           );
         })}
+        {pub.phase === "over" && !ended && (
+          <Finale pub={pub} mySeat={mySeat} seats={seats} eloBefore={eloBefore.current.get(mySeat)} pot={pot} ranked={!!ranked} onNext={nextRound} onLeave={onLeave} />
+        )}
       </div>
 
       <div ref={handRef} className={`hand ${dragOverHand ? "drop" : ""}`} style={{ "--n": sorted.length } as CSSProperties}>
         {sorted.map((c) => (
           <span key={c.id} ref={(el) => { if (el) cardRefs.current.set(c.id, el); else cardRefs.current.delete(c.id); }}
-            className={`slot ${drag?.moved && drag.id === c.id ? "lifted" : ""} ${arriving.has(c.id) ? "coming" : ""} ${landed === c.id ? "landed" : ""} ${breaks.has(c.id) ? "gap" : ""}`}
+            className={`slot ${drag?.moved && drag.id === c.id ? "lifted" : ""} ${arriving.has(c.id) ? "coming" : ""} ${landed === c.id ? "landed" : ""} ${breaks.has(c.id) ? "gap" : ""} ${ready.has(c.id) && !over ? "ready" : ""}`}
             onPointerDown={(e) => startDrag(e, { kind: "card", id: c.id, card: c })}>
             <CardView c={c} selected={sel === c.id} fresh={c.id === newest} onClick={() => tap(c)} />
           </span>
         ))}
       </div>
-      <p className="hint">{myTurn ? (pub.phase === "draw" ? "Dra ett kort från högen eller kasthögen till din hand – eller tryck på högen." : "Dra ett kort till kasthögen för att kasta – eller tryck två gånger på kortet.") : "Dra korten i handen för att sortera dem."}</p>
-      <div className="acts">
-        <button disabled={sel == null} onClick={() => shift(-1)} aria-label="Flytta vänster">←</button>
-        <button disabled={sel == null} onClick={() => shift(1)} aria-label="Flytta höger">→</button>
-        <span className="sorter" role="group" aria-label="Sortera handen">
-          <button onClick={() => sortBy("smart")} title="Lägger färdiga grupper och nästan färdiga grupper bredvid varandra">Grupper</button>
-          <button onClick={() => sortBy("rank")} title="Samma nummer bredvid varandra">Nummer</button>
-          <button onClick={() => sortBy("suit")} title="Samma färg i nummerordning">Färg</button>
+      <div className="handbar">
+        <span className="progress" aria-live="polite">
+          <span className="meter" style={{ "--v": inGroups / needed } as CSSProperties}><i /></span>
+          {over ? "" : inGroups === 0 ? "Inga färdiga grupper än" : `${inGroups} av ${needed} kort i färdiga grupper`}
         </span>
-        <button className="snd" aria-pressed={sound} aria-label={sound ? "Stäng av ljud" : "Sätt på ljud"}
-          onClick={() => { setSound(!sound); setSoundState(!sound); }}>{sound ? "🔊" : "🔈"}</button>
-        {pub.phase === "over" && !ended
-          ? <button className="main" onClick={nextRound}>Ny runda</button>
-          : <>
-              <button className="main" disabled={sel == null || !canThrow(sel)} onClick={() => sel != null && throwCard(sel)}>Kasta</button>
-              <button className="zhol" disabled={!canWin || busy} onClick={() => act({ type: "zhol" })}>Zhol!</button>
-            </>}
+        <span className="tools">
+          <button onClick={cycleSort} aria-label={`Sortera handen, nu: ${sortIdx < 0 ? "egen ordning" : SORTS[sortIdx].label}`}>
+            Sortera{sortIdx >= 0 && <em>{SORTS[sortIdx].label}</em>}
+          </button>
+          <button className="snd" aria-pressed={sound} aria-label={sound ? "Stäng av ljud" : "Sätt på ljud"}
+            onClick={() => { setSound(!sound); setSoundState(!sound); }}>{sound ? "🔊" : "🔈"}</button>
+        </span>
       </div>
+      <p className="hint">{myTurn ? (pub.phase === "draw" ? "Ta ett kort från högen eller kasthögen." : canWin ? "Handen går ihop – tryck på Zhol!" : "Dra ett kort till kasthögen, eller tryck två gånger på det.") : "Dra korten i handen för att ordna dem."}</p>
 
       {/* Card that follows the finger while dragging */}
       {drag?.moved && (

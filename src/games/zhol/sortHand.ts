@@ -49,8 +49,16 @@ function bestPartial(cards: Card[]): Card[] | null {
   return null;
 }
 
+export interface HandAnalysis { done: Card[][]; near: Card[][]; loose: Card[] }
+
 /** Groups the hand the way a player would: finished groups first, then near-groups, then the rest. */
 export function smartGroups(hand: Card[], small: boolean): Card[][] {
+  const { done, near, loose } = analyseHand(hand, small);
+  return [...done, ...near, ...(loose.length ? [loose] : [])];
+}
+
+/** Finished groups (3+ cards), near-groups (2 cards) and the loose cards of a hand. */
+export function analyseHand(hand: Card[], small: boolean): HandAnalysis {
   const jokers = hand.filter((c) => c.j);
   let rest = hand.filter((c) => !c.j);
   const out = (g: Card[]) => { rest = rest.filter((c) => !g.includes(c)); };
@@ -65,6 +73,5 @@ export function smartGroups(hand: Card[], small: boolean): Card[][] {
     else if (done.length && (!small || done[0].length < 4)) done[0].push(j);
     else rest.push(j);
   }
-  const loose = sortSuit(rest);
-  return [...done, ...near, ...(loose.length ? [loose] : [])];
+  return { done, near, loose: sortSuit(rest) };
 }
