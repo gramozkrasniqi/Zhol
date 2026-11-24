@@ -123,8 +123,7 @@ function nextIn(s: GameState, seat: number): number {
 }
 
 /* ---------- Group solver ---------- */
-// Splits cards into valid groups: sets (3–4 of the same rank, any suits – two packs
-// may give two identical cards, and they still count) or
+// Splits cards into valid groups: sets (3–4 same rank, different suits) or
 // runs (3+ same suit in sequence, ace low or high, no wrap). Jokers stand in
 // for any card; every group needs at least one real card.
 // small = Zhol i vogël: groups of 3–4 only (7 cards ⇒ exactly 3+4).
@@ -137,7 +136,9 @@ function solve(real: Card[], J: Card[], small: boolean): Card[][] | null {
   const c = real[0], rest = real.slice(1), maxRun = small ? 4 : 14;
 
   // Sets containing c
-  const opts = rest.filter((x) => x.r === c.r);
+  const bySuit = new Map<number, Card>();
+  for (const x of rest) if (x.r === c.r && x.s !== c.s && !bySuit.has(x.s!)) bySuit.set(x.s!, x);
+  const opts = [...bySuit.values()];
   for (let m = 0; m < 1 << opts.length; m++) {
     const pick = opts.filter((_, i) => (m >> i) & 1), n = 1 + pick.length;
     if (n > 4) continue;
@@ -415,7 +416,7 @@ function usefulness(c: Card, hand: Card[]): number {
   let u = 0;
   for (const o of hand) {
     if (o === c || o.j) continue;
-    if (o.r === c.r) u += 3;
+    if (o.r === c.r && o.s !== c.s) u += 3;
     if (o.s === c.s && o.r !== c.r) {
       const d = Math.min(Math.abs(o.r! - c.r!), Math.abs(hi(o.r!) - hi(c.r!)));
       if (d === 1) u += 3;
