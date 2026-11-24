@@ -5,9 +5,11 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 export const configured = Boolean(url && key);
 export const sb = createClient(url || "http://localhost", key || "missing");
 
-export interface Profile { id: string; username: string; elo: number; games: number; wins: number }
+export interface Profile { id: string; username: string }
+export interface Rating { user_id: string; game: string; elo: number; games: number; wins: number }
+export const START_ELO = 1200;
 export interface Table {
-  id: string; code: string; variant: "small" | "big"; seats: number; ranked: boolean;
+  id: string; code: string; game: string; variant: string; seats: number; ranked: boolean;
   status: "waiting" | "playing" | "finished"; host: string; game_id: string | null; round: number;
 }
 

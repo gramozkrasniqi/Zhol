@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyAction, eloDeltas, findGroups, leagueOf, newGame, publicView, MoveError, type Card,
-} from "../supabase/functions/_shared/engine";
+  applyAction, findGroups, newGame, publicView, MoveError, type Card,
+} from "../supabase/functions/_shared/games/zhol";
+import { eloDeltas, leagueOf } from "../supabase/functions/_shared/rating";
+import { GAMES } from "../supabase/functions/_shared/games";
 
 let n = 1000;
 const C = (r: number, s: number): Card => ({ id: n++, r, s });
@@ -77,5 +79,15 @@ describe("rating", () => {
   it("ligor", () => {
     expect(leagueOf(1200)).toBe("Silver");
     expect(leagueOf(1750)).toBe("Diamant");
+  });
+});
+
+describe("plattform", () => {
+  it("zhol är registrerat och följer kontraktet", () => {
+    const g = GAMES.zhol;
+    const s = g.newGame("small", 2, 0);
+    expect(g.hands(s)).toHaveLength(2);
+    expect(g.result(s)).toBeNull();
+    expect(() => g.newGame("okänd", 2, 0)).toThrow();
   });
 });

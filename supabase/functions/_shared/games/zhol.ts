@@ -1,5 +1,6 @@
-// Zhol – shared game engine. Runs both in the Supabase edge function (Deno)
-// and in the browser. Pure functions only, no imports.
+// Zhol – game engine. Runs both in the Supabase edge function (Deno)
+// and in the browser. Pure functions only.
+import { GameError, type GameModule } from "./types.ts";
 
 export type Variant = "small" | "big";
 export interface Card { id: number; r?: number; s?: number; j?: 1 }
@@ -127,7 +128,7 @@ export function findWin(hand: Card[], taken: number | null, small: boolean): { d
 }
 
 /* ---------- Moves ---------- */
-export class MoveError extends Error {}
+export class MoveError extends GameError {}
 
 /** Applies a move for `seat`. Returns a new state; throws MoveError if illegal. */
 export function applyAction(prev: GameState, seat: number, a: Action, rnd?: () => number): GameState {
@@ -195,30 +196,21 @@ export function publicView(s: GameState): PublicState {
   };
 }
 
-/* ---------- Rating ---------- */
-export const K_FACTOR = 32;
-/** Elo change for each seat. Multiplayer: winner beat every other player pairwise. */
-export function eloDeltas(ratings: number[], winner: number): number[] {
-  const d = ratings.map(() => 0);
-  if (winner < 0) return d;
-  const k = K_FACTOR / Math.max(1, ratings.length - 1);
-  for (let i = 0; i < ratings.length; i++) {
-    if (i === winner) continue;
-    const exp = 1 / (1 + 10 ** ((ratings[i] - ratings[winner]) / 400));
-    const ch = Math.round(k * (1 - exp));
-    d[winner] += ch;
-    d[i] -= ch;
-  }
-  return d;
-}
-
-export const LEAGUES = [
-  { name: "Brons", min: 0 },
-  { name: "Silver", min: 1100 },
-  { name: "Guld", min: 1300 },
-  { name: "Platina", min: 1500 },
-  { name: "Diamant", min: 1700 },
-] as const;
-export function leagueOf(elo: number) {
-  return [...LEAGUES].reverse().find((l) => elo >= l.min)!.name;
-}
+/* ---------- Plugin for the platform ---------- */
+export const zhol: GameModule<GameState, Action, PublicState, Card[]> = {
+  id: "zhol",
+  name: "Zhol",
+  variants: [
+    { id: "small", label: "Zhol i vogël · 7 kort" },
+    { id: "big", label: "Zhol i madh · 14 kort" },
+  ],
+  seatOptions: [2, 4],
+  newGame: (variant, seats, starter) => {
+    if (variant !== "small" && variant !== "big") throw new MoveError("Ogiltig variant");
+    return newGame(variant, seats, starter);
+  },
+  applyAction,
+  publicView,
+  hands: (s) => s.hands,
+  result: (s) => (s.phase === "over" ? { winner: s.winner ?? -1 } : null),
+};

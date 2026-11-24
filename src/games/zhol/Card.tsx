@@ -1,4 +1,4 @@
-import type { Card } from "../supabase/functions/_shared/engine";
+import type { Card } from "../../../supabase/functions/_shared/games/zhol";
 
 const SU = ["♠︎", "♥︎", "♦︎", "♣︎"];
 const NAMES = ["spathi", "kupa", "karo", "maç"];

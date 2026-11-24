@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { leagueOf, type Variant } from "../supabase/functions/_shared/engine";
-import { api, sb, type Profile, type Table } from "./lib";
+import { GAMES } from "../supabase/functions/_shared/games";
+import { leagueOf } from "../supabase/functions/_shared/rating";
+import { api, sb, START_ELO, type Profile, type Rating, type Table } from "./lib";
+
+type Row = Rating & { profiles: { username: string } };
 
 export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => void }) {
+  const ids = Object.keys(GAMES);
+  const [game, setGame] = useState(ids[0]);
+  const mod = GAMES[game];
+  const [variant, setVariant] = useState(mod.variants[0].id);
+  const [seats, setSeats] = useState(mod.seatOptions[0]);
   const [me, setMe] = useState<Profile | null>(null);
-  const [top, setTop] = useState<Profile[]>([]);
-  const [variant, setVariant] = useState<Variant>("small");
-  const [seats, setSeats] = useState(2);
+  const [rating, setRating] = useState<Rating | null>(null);
+  const [top, setTop] = useState<Row[]>([]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [searching, setSearching] = useState(false);
@@ -14,15 +21,23 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const poll = useRef<number>();
 
   const load = useCallback(async () => {
-    const [{ data: p }, { data: t }] = await Promise.all([
+    const [{ data: p }, { data: r }, { data: t }] = await Promise.all([
       sb.from("profiles").select().eq("id", uid).single(),
-      sb.from("profiles").select().gt("games", 0).order("elo", { ascending: false }).limit(20),
+      sb.from("ratings").select().eq("user_id", uid).eq("game", game).maybeSingle(),
+      sb.from("ratings").select("*, profiles(username)").eq("game", game).order("elo", { ascending: false }).limit(20),
     ]);
     if (p) { setMe(p); setName(p.username); }
-    setTop(t ?? []);
-  }, [uid]);
+    setRating(r);
+    setTop((t ?? []) as Row[]);
+  }, [uid, game]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => () => window.clearInterval(poll.current), []);
+
+  function pickGame(id: string) {
+    setGame(id);
+    setVariant(GAMES[id].variants[0].id);
+    setSeats(GAMES[id].seatOptions[0]);
+  }
 
   async function run<T>(f: () => Promise<T>) {
     setErr("");
@@ -30,10 +45,10 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   }
 
   async function quick() {
-    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { variant }));
+    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant }));
     if (!r) return;
     if (!r.waiting) return onOpen(r.table.id);
-    // We opened a table: wait until someone sits down, and keep looking for others meanwhile
+    // We opened a table: wait for someone to sit down, and keep looking for others meanwhile
     setSearching(true);
     const myTable = r.table.id;
     window.clearInterval(poll.current);
@@ -41,7 +56,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
       const { data } = await sb.from("tables").select("status").eq("id", myTable).maybeSingle();
       if (data?.status === "playing") { window.clearInterval(poll.current); return onOpen(myTable); }
       try {
-        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { variant });
+        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant });
         if (!again.waiting) { window.clearInterval(poll.current); onOpen(again.table.id); }
       } catch { /* keep waiting */ }
     }, 4000);
@@ -54,6 +69,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
     for (const t of data ?? []) await run(() => api("leave_table", { tableId: t.id }));
   }
 
+  const elo = rating?.elo ?? START_ELO;
   return (
     <>
       <header className="bar">
@@ -70,22 +86,25 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
               {name !== me.username && <button className="ghost">Spara</button>}
             </form>
           </div>
-          <div className="stat"><b>{me.elo}</b><span>{leagueOf(me.elo)}</span></div>
-          <div className="stat"><b>{me.wins}/{me.games}</b><span>vinster</span></div>
+          <div className="stat"><b>{elo}</b><span>{leagueOf(elo)} i {mod.name}</span></div>
+          <div className="stat"><b>{rating?.wins ?? 0}/{rating?.games ?? 0}</b><span>vinster</span></div>
         </section>
       )}
 
       <section className="panel col">
         <h2>Spela</h2>
+        {ids.length > 1 && (
+          <div className="seg" role="radiogroup" aria-label="Spel">
+            {ids.map((id) => <button key={id} role="radio" aria-checked={game === id} className={game === id ? "on" : ""} onClick={() => pickGame(id)}>{GAMES[id].name}</button>)}
+          </div>
+        )}
         <div className="seg" role="radiogroup" aria-label="Variant">
-          {(["small", "big"] as const).map((v) => (
-            <button key={v} role="radio" aria-checked={variant === v} className={variant === v ? "on" : ""} onClick={() => setVariant(v)}>
-              {v === "small" ? "Zhol i vogël · 7" : "Zhol i madh · 14"}
-            </button>
+          {mod.variants.map((v) => (
+            <button key={v.id} role="radio" aria-checked={variant === v.id} className={variant === v.id ? "on" : ""} onClick={() => setVariant(v.id)}>{v.label}</button>
           ))}
         </div>
         {searching ? (
-          <div className="row"><span className="pulse">Söker motståndare nära {me?.elo}…</span><button className="ghost" onClick={cancel}>Avbryt</button></div>
+          <div className="row"><span className="pulse">Söker motståndare nära {elo}…</span><button className="ghost" onClick={cancel}>Avbryt</button></div>
         ) : (
           <button className="primary big" onClick={quick}>Snabbmatch – rankad, 1 mot 1</button>
         )}
@@ -95,9 +114,9 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
         <div className="panel col">
           <h2>Med vänner</h2>
           <div className="seg">
-            {[2, 4].map((n) => <button key={n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>)}
+            {mod.seatOptions.map((n) => <button key={n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>)}
           </div>
-          <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { variant, seats })).then((r) => r && onOpen(r.table.id))}>
+          <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats })).then((r) => r && onOpen(r.table.id))}>
             Skapa privat bord
           </button>
         </div>
@@ -110,12 +129,12 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
       {err && <p className="err">{err}</p>}
 
       <section className="panel">
-        <h2>Topplista</h2>
+        <h2>Topplista · {mod.name}</h2>
         {top.length ? (
           <table className="board">
             <thead><tr><th>#</th><th>Spelare</th><th>Liga</th><th className="num">Elo</th></tr></thead>
             <tbody>{top.map((p, i) => (
-              <tr key={p.id} className={p.id === uid ? "mine" : ""}><td>{i + 1}</td><td>{p.username}</td><td>{leagueOf(p.elo)}</td><td className="num">{p.elo}</td></tr>
+              <tr key={p.user_id} className={p.user_id === uid ? "mine" : ""}><td>{i + 1}</td><td>{p.profiles.username}</td><td>{leagueOf(p.elo)}</td><td className="num">{p.elo}</td></tr>
             ))}</tbody>
           </table>
         ) : <p className="muted">Ingen har spelat än. Bli först på listan.</p>}
