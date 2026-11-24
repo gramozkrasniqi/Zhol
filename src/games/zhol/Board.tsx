@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { findWin, type Action, type Card, type LogEntry, type PublicState } from "../../../supabase/functions/_shared/games/zhol";
 import type { BoardProps } from "../types";
 import { Back, CardView } from "./Card";
+import { AvatarFace } from "../../Avatar";
 
 /** Where a seat sits around the oval. The player is always at the bottom; the radius lives in CSS. */
 function seatPosition(offset: number, total: number): CSSProperties {
   const angle = Math.PI / 2 + (offset * 2 * Math.PI) / total; // 90° = bottom, clockwise
   return { "--c": Math.cos(angle).toFixed(3), "--s": Math.sin(angle).toFixed(3) } as CSSProperties;
 }
+
+const botLevel = (skill?: number | null) => ((skill ?? 0.7) < 0.45 ? "Nybörjare" : (skill ?? 0.7) < 0.8 ? "Van" : "Expert");
 
 interface Flight { key: number; card?: Card; from: DOMRect; to: DOMRect }
 interface Drag { kind: "card" | "stock" | "discard"; id?: number; x0: number; y0: number; x: number; y: number; moved: boolean; card?: Card }
@@ -16,7 +19,7 @@ const STEP_MS = 520; // pause between animated moves, so bot turns can be follow
 const inside = (r: DOMRect | undefined, x: number, y: number, pad = 12) =>
   !!r && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 
-export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended, timeLeft, turnSeconds = 45, pot }: BoardProps<PublicState, Card[], Action>) {
+export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended, timeLeft, turnSeconds = 45, pot, bubbles = {} }: BoardProps<PublicState, Card[], Action>) {
   const [order, setOrder] = useState<number[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -197,7 +200,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
               </div>
             )}
             <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>
-            {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")}</div> : null}
+            {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")} Lek</div> : null}
           </div>
         </div></div>
 
@@ -211,12 +214,15 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
             <div key={s.seat} ref={(el) => { if (el) seatRefs.current.set(s.seat, el); else seatRefs.current.delete(s.seat); }}
               className={`seat ${offset === 0 ? "me" : ""} ${active ? "active" : ""} ${won ? "won" : ""}`} style={seatPosition(offset, total)}>
               <div className="avatar" style={ring(s.seat)}>
-                <span>{label.slice(0, 1).toUpperCase()}</span>
+                <span className="face"><AvatarFace who={s} /></span>
                 {active && timeLeft != null && <b className="secs">{timeLeft}</b>}
+                {bubbles[s.seat] && <span className={`bubble ${Math.sin(Math.PI / 2 + (offset * 2 * Math.PI) / total) < -0.2 ? "down" : ""}`} role="status">{bubbles[s.seat]}</span>}
               </div>
               <div className="plate">
                 <span className="nm">{offset === 0 ? "Du" : label}{isBot && <em>bot</em>}</span>
-                <span className="meta"><span className="elo">{s.elo} · </span>{pub.handCounts[s.seat] ?? 0} kort</span>
+                <span className="meta">{isBot
+                  ? <>{botLevel(s.botSkill)}, </>
+                  : <span className="elo">{s.elo} Elo, </span>}{pub.handCounts[s.seat] ?? 0} kort</span>
               </div>
               {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
             </div>

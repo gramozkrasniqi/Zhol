@@ -18,8 +18,9 @@ export interface GameModule<S = unknown, A = unknown, P = unknown, H = unknown> 
   turn(state: S): number | null;
   /** One move the server plays for `seat` when its turn timer runs out (repeated until the turn passes). */
   autoMove(state: S, seat: number): A | null;
-  /** One move for a computer player (repeated until the turn passes). Falls back to autoMove if absent. */
-  botMove?(state: S, seat: number): A | null;
+  /** One move for a computer player (repeated until the turn passes). Falls back to autoMove if absent.
+   *  skill: 0 (beginner) – 1 (expert); lower skill should make more mistakes. */
+  botMove?(state: S, seat: number, skill?: number): A | null;
 }
 
 /** Throw this (or a subclass) for an illegal move; its message is shown to the player. */

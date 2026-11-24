@@ -169,3 +169,25 @@ describe("draglogg för animationer", () => {
     expect(log[2].card).toBeUndefined();
   });
 });
+
+describe("botarnas skicklighet", () => {
+  it("expert ropar alltid Zhol, nybörjare missar ibland", () => {
+    const s = newGame("small", 2, 0);
+    s.hands[0] = [C(5, 0), C(5, 1), C(5, 2), C(9, 3), C(10, 3), C(11, 3), C(2, 1), C(12, 3)];
+    s.phase = "discard";
+    const expert = Array.from({ length: 200 }, () => GAMES.zhol.botMove!(s, 0, 1).type);
+    const beginner = Array.from({ length: 400 }, () => GAMES.zhol.botMove!(s, 0, 0).type);
+    expect(expert.every((t) => t === "zhol")).toBe(true);
+    expect(beginner.some((t) => t !== "zhol")).toBe(true);
+    expect(beginner.filter((t) => t === "zhol").length).toBeGreaterThan(200);
+  });
+  it("nybörjarbotar spelar ändå bara giltiga drag till slut", () => {
+    const g = GAMES.zhol;
+    let s = g.newGame("small", 4, 0);
+    for (let i = 0; i < 4000 && !g.result(s); i++) {
+      const seat = g.turn(s)!;
+      s = g.applyAction(s, seat, g.botMove!(s, seat, 0.2));
+    }
+    expect(g.result(s)).not.toBeNull();
+  });
+});

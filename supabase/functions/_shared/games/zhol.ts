@@ -256,22 +256,28 @@ function usefulness(c: Card, hand: Card[]): number {
   return u;
 }
 
-export function botMove(s: GameState, seat: number): Action | null {
+/** skill 0–1: an expert (1) always plays the best move it sees; a beginner (0) often misses things. */
+export function botMove(s: GameState, seat: number, skill = 1, rnd: () => number = Math.random): Action | null {
   if (s.phase === "over" || s.turn !== seat) return null;
   const hand = s.hands[seat];
   const small = s.variant === "small";
+  const slip = (p: number) => rnd() < p * (1 - Math.max(0, Math.min(1, skill)));
   if (s.phase === "draw") {
     const top = s.discard[s.discard.length - 1];
-    // Take the open card if it completes the hand or clearly fits
-    if (top && (top.j || findWin([...hand, top], top.id, small) || usefulness(top, [...hand, top]) >= 3)) {
-      return { type: "draw", from: "discard" };
-    }
+    // Take the open card if it completes the hand or clearly fits – unless the bot overlooks it
+    const good = top && (top.j || findWin([...hand, top], top.id, small) || usefulness(top, [...hand, top]) >= 3);
+    if (good && !slip(0.6)) return { type: "draw", from: "discard" };
     return { type: "draw", from: "stock" };
   }
-  if (findWin(hand, s.taken, small)) return { type: "zhol" };
+  if (findWin(hand, s.taken, small) && !slip(0.35)) return { type: "zhol" };
+  const options = hand.filter((c) => c.id !== s.taken);
+  // A careless bot sometimes throws a random card (never a joker)
+  if (slip(0.5)) {
+    const plain = options.filter((c) => !c.j);
+    if (plain.length) return { type: "discard", cardId: plain[Math.floor(rnd() * plain.length)].id };
+  }
   let worst: Card | null = null, low = Infinity;
-  for (const c of hand) {
-    if (c.id === s.taken) continue;
+  for (const c of options) {
     const u = usefulness(c, hand);
     if (u < low) { low = u; worst = c; }
   }

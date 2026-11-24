@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-export interface SeatInfo { user_id: string; seat: number; username: string; elo: number }
+export interface SeatInfo { user_id: string; seat: number; username: string; elo: number; avatar?: string | null; botSkill?: number | null }
 
 /** What the platform hands every game board. */
 export interface BoardProps<P = unknown, H = unknown, A = unknown> {
@@ -16,8 +16,10 @@ export interface BoardProps<P = unknown, H = unknown, A = unknown> {
   /** Seconds left for the player whose turn it is, and the full turn length. */
   timeLeft?: number | null;
   turnSeconds?: number;
-  /** Chips in the pot, if the table has a stake. */
+  /** Lek in the pot, if the table has a stake. */
   pot?: number;
+  /** Latest chat line per seat, shown as a speech bubble for a few seconds. */
+  bubbles?: Record<number, string>;
 }
 
 export interface GameUI {

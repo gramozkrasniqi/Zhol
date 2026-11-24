@@ -3,8 +3,9 @@ import { GAMES } from "../supabase/functions/_shared/games";
 import { leagueOf } from "../supabase/functions/_shared/rating";
 import { api, chips, DAILY_CHIPS, sb, STAKES, START_ELO, swedishToday, type Profile, type Rating, type Table, type Wallet } from "./lib";
 import { Fan } from "./Login";
+import { Avatar, PRESETS, squareWebp } from "./Avatar";
 
-type Row = Rating & { profiles: { username: string } };
+type Row = Rating & { profiles: { username: string; avatar: string | null } };
 const BOT_FILL_AFTER = 20; // seconds of quick-match search before bots fill the table
 
 export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => void }) {
@@ -24,13 +25,14 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const [waitingTable, setWaitingTable] = useState<string | null>(null);
   const [waited, setWaited] = useState(0);
   const [err, setErr] = useState("");
+  const [uploading, setUploading] = useState(false);
   const poll = useRef<number>();
 
   const load = useCallback(async () => {
     const [{ data: p }, { data: r }, { data: t }, { data: w }] = await Promise.all([
       sb.from("profiles").select().eq("id", uid).single(),
       sb.from("ratings").select().eq("user_id", uid).eq("game", game).maybeSingle(),
-      sb.from("ratings").select("*, profiles(username)").eq("game", game).order("elo", { ascending: false }).limit(20),
+      sb.from("ratings").select("*, profiles(username, avatar)").eq("game", game).order("elo", { ascending: false }).limit(20),
       sb.from("wallets").select().eq("user_id", uid).maybeSingle(),
     ]);
     setWallet(w);
@@ -99,6 +101,29 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
     for (const t of data ?? []) await run(() => api("leave_table", { tableId: t.id }));
   }
 
+  async function setAvatar(value: string) {
+    const r = await run(async () => {
+      const { error } = await sb.from("profiles").update({ avatar: value }).eq("id", uid);
+      if (error) throw new Error("Avataren kunde inte sparas");
+      return true;
+    });
+    if (r) load();
+  }
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    await run(async () => {
+      const blob = await squareWebp(file);
+      const path = `${uid}/avatar.webp`;
+      const { error } = await sb.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/webp" });
+      if (error) throw new Error("Bilden kunde inte laddas upp");
+      const url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+      await setAvatar(`${url}?v=${Date.now()}`);
+    });
+    setUploading(false);
+  }
+
   const elo = rating?.elo ?? START_ELO;
   const balance = wallet?.balance ?? 0;
   const dailyReady = wallet !== null && wallet.last_daily !== swedishToday();
@@ -110,12 +135,27 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
       <header className="topbar">
         <span className="wordmark">Zhol</span>
         <div className="topbar-right">
-          <span className="chip-pill" title="Dina marker"><i className="chip-ico" aria-hidden="true" />{chips(balance)}</span>
+          <span className="chip-pill" title="Dina Lek"><i className="chip-ico" aria-hidden="true" />{chips(balance)} Lek</span>
           <details className="profile">
-            <summary aria-label="Profil">
-              <span className="avatar-sm">{(me?.username ?? "?").slice(0, 1).toUpperCase()}</span>
+            <summary aria-label="Profil och avatar">
+              <Avatar who={{ username: me?.username ?? "?", avatar: me?.avatar }} size={42} />
             </summary>
             <div className="profile-menu panel col">
+              <div className="col">
+                <span className="menu-label">Din avatar</span>
+                <div className="avatar-grid" role="radiogroup" aria-label="Välj avatar">
+                  {PRESETS.map((p) => (
+                    <button key={p.id} role="radio" aria-checked={me?.avatar === `preset:${p.id}`} aria-label={p.label}
+                      className={`avatar-opt ${me?.avatar === `preset:${p.id}` ? "on" : ""}`} onClick={() => setAvatar(`preset:${p.id}`)}>
+                      <Avatar who={{ username: "", avatar: `preset:${p.id}` }} size={40} />
+                    </button>
+                  ))}
+                </div>
+                <label className="upload ghost">
+                  <input type="file" accept="image/*" onChange={(e) => upload(e.target.files?.[0])} disabled={uploading} />
+                  {uploading ? "Laddar upp…" : "Ladda upp egen bild"}
+                </label>
+              </div>
               <form className="col" onSubmit={(e) => { e.preventDefault(); run(() => api("set_username", { username: name })).then(load); }}>
                 <label htmlFor="un">Ditt namn vid bordet</label>
                 <input id="un" value={name} onChange={(e) => setName(e.target.value)} />
@@ -158,7 +198,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
 
       {dailyReady && (
         <button className="daily" onClick={() => run(() => api("claim_daily")).then(load)}>
-          <i className="chip-ico" aria-hidden="true" /> Hämta dagens {chips(DAILY_CHIPS)} gratis marker
+          <i className="chip-ico" aria-hidden="true" /> Hämta dagens {chips(DAILY_CHIPS)} gratis Lek
         </button>
       )}
       {err && <p className="err">{err}</p>}
@@ -200,12 +240,12 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
             <div className="chips" role="radiogroup" aria-label="Insats per spelare">
               {STAKES.map((n) => (
                 <button key={n} role="radio" aria-checked={stake === n} className={`pchip v${n} ${stake === n ? "on" : ""}`} disabled={n > balance} onClick={() => setStake(n)}
-                  aria-label={n === 0 ? "Gratis" : `${chips(n)} marker`}>
+                  aria-label={n === 0 ? "Gratis" : `${chips(n)} Lek`}>
                   <span>{n === 0 ? "0" : n >= 1000 ? `${n / 1000}k` : n}</span>
                 </button>
               ))}
             </div>
-            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} marker. Vinnaren tar allt.`}</p>
+            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} Lek. Vinnaren tar allt.`}</p>
           </fieldset>
         </div>
       </section>
@@ -232,7 +272,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
             <ol className="podium">
               {podium.map((p, i) => (
                 <li key={p.user_id} className={`place p${i + 1} ${p.user_id === uid ? "mine" : ""}`}>
-                  <span className="avatar-sm">{p.profiles.username.slice(0, 1).toUpperCase()}</span>
+                  <Avatar who={p.profiles} size={i === 0 ? 56 : 46} />
                   <b className="nm">{p.profiles.username}</b>
                   <span className="elo-n">{p.elo}</span>
                   <span className="step" aria-hidden="true">{i + 1}</span>
@@ -250,7 +290,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
           </>
         ) : <p className="muted">Ingen har spelat en rankad match än. Vinn en snabbmatch så hamnar du först här.</p>}
       </section>
-      <p className="fine center">Markerna är låtsaspengar. De har inget värde och kan inte växlas in eller föras över.</p>
+      <p className="fine center">Lek i Zhol är spelpengar, inte riktiga albanska lek. De har inget värde och kan inte växlas in eller föras över.</p>
     </div>
   );
 }

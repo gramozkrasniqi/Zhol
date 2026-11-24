@@ -3,13 +3,15 @@ import { GAMES } from "../supabase/functions/_shared/games";
 import { BOARDS } from "./games";
 import type { SeatInfo } from "./games/types";
 import { api, chips, sb, START_ELO, type Table } from "./lib";
+import { TableChat, type ChatMessage } from "./TableChat";
 
 interface GameRow {
   id: string; public: { turn?: number }; turn_deadline: string | null; finished_at: string | null;
   outcome: { type: "forfeit"; seat: number; reason: "timeout" | "resign" } | null;
 }
 const CLAIM_AFTER_MS = 2000;
-const TURN_SECONDS = 45;   // must match the server // a little more than the server's grace, so claims are not rejected
+const TURN_SECONDS = 45;   // must match the server
+const BUBBLE_MS = 5000;    // how long a chat line stays above a seat
 
 /** Platform shell around any game: waiting room, header, realtime sync, moves. */
 export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: string; onLeave: () => void }) {
@@ -21,16 +23,30 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
   const [hand, setHand] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [bubbles, setBubbles] = useState<Record<number, string>>({});
+  const seatsRef = useRef<SeatInfo[]>([]);
+  seatsRef.current = seats;
+
+  function showBubble(m: ChatMessage) {
+    const seat = seatsRef.current.find((s) => s.user_id === m.user_id)?.seat;
+    if (seat === undefined) return;
+    setBubbles((b) => ({ ...b, [seat]: m.body }));
+    window.setTimeout(() => setBubbles((b) => {
+      if (b[seat] !== m.body) return b;
+      const { [seat]: _gone, ...rest } = b;
+      return rest;
+    }), BUBBLE_MS);
+  }
 
   const load = useCallback(async () => {
     const { data: t } = await sb.from("tables").select().eq("id", tableId).maybeSingle();
     if (!t) return onLeave();
     setTable(t);
-    const { data: p } = await sb.from("table_players").select("user_id, seat, profiles(username)").eq("table_id", tableId).order("seat");
-    const players = (p ?? []) as unknown as { user_id: string; seat: number; profiles: { username: string } }[];
+    const { data: p } = await sb.from("table_players").select("user_id, seat, profiles(username, avatar, is_bot, bot_skill)").eq("table_id", tableId).order("seat");
+    const players = (p ?? []) as unknown as { user_id: string; seat: number; profiles: { username: string; avatar: string | null; is_bot: boolean; bot_skill: number | null } }[];
     const { data: r } = await sb.from("ratings").select("user_id, elo").eq("game", t.game).in("user_id", players.map((x) => x.user_id));
     const elo = new Map((r ?? []).map((x) => [x.user_id, x.elo as number]));
-    setSeats(players.map((x) => ({ user_id: x.user_id, seat: x.seat, username: x.profiles.username, elo: elo.get(x.user_id) ?? START_ELO })));
+    setSeats(players.map((x) => ({ user_id: x.user_id, seat: x.seat, username: x.profiles.username, avatar: x.profiles.avatar, botSkill: x.profiles.is_bot ? x.profiles.bot_skill ?? 0.7 : null, elo: elo.get(x.user_id) ?? START_ELO })));
     if (t.game_id) {
       const [{ data: g }, { data: h }] = await Promise.all([
         sb.from("games").select("id, public, turn_deadline, finished_at, outcome").eq("id", t.game_id).single(),
@@ -96,13 +112,14 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     return (
       <section className="panel col center waiting-room">
         <h2>{table.ranked ? "Rankad match" : "Privat bord"} i {mod?.name ?? table.game}</h2>
-        <p className="muted">{variant}{table.stake > 0 && `, insats ${chips(table.stake)} marker, pott ${chips(table.stake * table.seats)}`}</p>
+        <p className="muted">{variant}{table.stake > 0 && `, insats ${chips(table.stake)} Lek, pott ${chips(table.stake * table.seats)} Lek`}</p>
         {!table.ranked && <>
           <p>Skicka koden till dina vänner:</p>
           <button className="code" onClick={() => navigator.clipboard?.writeText(table.code).catch(() => {})}>{table.code}</button>
         </>}
         <p>{seats.length} av {table.seats} spelare: {seats.map((s) => s.username).join(", ")}</p>
         <p className="pulse">Väntar på spelare…</p>
+        <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         <div className="row">
           <button className="primary" onClick={() => api("fill_bots", { tableId }).then(load).catch((e) => setErr(e.message))}>Fyll lediga platser med botar</button>
           <button className="ghost" onClick={leave}>Lämna bordet</button>
@@ -126,8 +143,9 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           <span className="tag">{variant}</span>
           <span className="tag">{table.ranked ? "Rankad" : `Bord ${table.code}`}</span>
           <span className="tag">Runda {table.round}</span>
-          {table.stake > 0 && <span className="tag gold">Pott {chips(table.stake * table.seats)}</span>}
+          {table.stake > 0 && <span className="tag gold">Pott {chips(table.stake * table.seats)} Lek</span>}
         </span>
+        <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         {running && (confirmResign
           ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
           : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}
@@ -142,7 +160,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
         </div>
       )}
       {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
-          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} />
+          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} bubbles={bubbles} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}
     </>

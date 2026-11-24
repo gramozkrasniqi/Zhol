@@ -22,6 +22,14 @@ const MAX_STRIKES = 2;     // missed turns in a row before a player forfeits
 const STAKES = [0, 100, 500, 1000]; // allowed buy-ins per player (play chips, no cash value)
 const DAILY_CHIPS = 500;
 const BOT_NAMES = ["Arben", "Drita", "Besnik", "Mimoza", "Ilir", "Teuta", "Luan", "Vjosa", "Agon", "Blerta"];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Lets bots keep playing after the response has been sent (Supabase EdgeRuntime). */
+function background(p: Promise<unknown>) {
+  const task = p.catch((e) => console.error("bots", e));
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt?.waitUntil) rt.waitUntil(task);
+}
 const deadlineFromNow = () => new Date(Date.now() + TURN_SECONDS * 1000).toISOString();
 
 Deno.serve(async (req) => {
@@ -102,7 +110,7 @@ function checkStake(stake: unknown): number {
 
 async function createTable(db: SupabaseClient, uid: string, game: string, variant: unknown, seats: unknown, ranked: boolean, stake: unknown = 0) {
   const st = checkStake(stake);
-  if (st > 0 && (await balanceOf(db, uid)) < st) throw new UserError("Du har inte tillräckligt med marker");
+  if (st > 0 && (await balanceOf(db, uid)) < st) throw new UserError("Du har inte tillräckligt med Lek");
   const g = moduleFor(game);
   const v = String(variant ?? g.variants[0].id);
   if (!g.variants.some((x) => x.id === v)) throw new UserError("Ogiltig variant");
@@ -120,7 +128,7 @@ async function seatPlayer(db: SupabaseClient, uid: string, table: { id: string; 
   const taken = new Set(players.map((p) => p.seat));
   const seat = [...Array(table.seats).keys()].find((s) => !taken.has(s));
   if (seat === undefined) throw new UserError("Bordet är fullt");
-  if (table.stake > 0 && (await balanceOf(db, uid)) < table.stake) throw new UserError(`Insatsen är ${table.stake} marker – du har inte tillräckligt`);
+  if (table.stake > 0 && (await balanceOf(db, uid)) < table.stake) throw new UserError(`Insatsen är ${table.stake} Lek – du har inte tillräckligt`);
   const ins = await db.from("table_players").insert({ table_id: table.id, user_id: uid, seat });
   if (ins.error?.code === "23505") throw new UserError("Platsen togs precis – försök igen");
   ok(ins);
@@ -191,7 +199,7 @@ async function startGame(db: SupabaseClient, tableId: string) {
   try {
     ok(await db.rpc("charge_stakes", { p_game: gameId, p_users: players.map((p) => p.user_id), p_stake: t.stake }));
   } catch (e) {
-    if ((e as { code?: string })?.code === "P0001") throw new UserError(`Någon vid bordet har inte ${t.stake} marker`);
+    if ((e as { code?: string })?.code === "P0001") throw new UserError(`Någon vid bordet har inte ${t.stake} Lek`);
     throw e;
   }
   const row = ok(await db.from("games").insert({
@@ -200,7 +208,7 @@ async function startGame(db: SupabaseClient, tableId: string) {
   ok(await db.from("game_secrets").insert({ game_id: row.id, state }));
   ok(await db.from("game_hands").insert(players.map((p) => ({ game_id: row.id, user_id: p.user_id, seat: p.seat, cards: hands[p.seat] }))));
   ok(await db.from("tables").update({ status: "playing", game_id: row.id, round: t.round + 1 }).eq("id", tableId));
-  await runBots(db, row.id);
+  background(runBots(db, row.id));
   return row;
 }
 
@@ -216,7 +224,10 @@ async function ensureBots(db: SupabaseClient, n: number): Promise<string[]> {
       email: `bot-${crypto.randomUUID().slice(0, 8)}@bots.zhol.invalid`, email_confirm: true, user_metadata: { bot: true },
     });
     if (error || !data.user) throw error ?? new Error("Kunde inte skapa bot");
-    ok(await db.from("profiles").update({ is_bot: true, username: `${BOT_NAMES[i % BOT_NAMES.length]}${i >= BOT_NAMES.length ? i : ""} (bot)` }).eq("id", data.user.id));
+    ok(await db.from("profiles").update({
+      is_bot: true, username: `${BOT_NAMES[i % BOT_NAMES.length]}${i >= BOT_NAMES.length ? i : ""} (bot)`,
+      bot_skill: Math.round((0.15 + Math.random() * 0.85) * 100) / 100, bot_speed: Math.round((1 + Math.random() * 2.5) * 10) / 10,
+    }).eq("id", data.user.id));
     ids.push(data.user.id);
   }
   return ids;
@@ -242,22 +253,35 @@ async function playBots(db: SupabaseClient, uid: string, game: string, variant: 
   return fillWithBots(db, uid, table.id);
 }
 
-/** Plays every bot turn in a row until it is a human's turn or the game ends. */
+/** Plays every bot turn until it is a human's turn or the game ends, with human-like thinking time.
+ *  Runs in the background, so the player who just moved gets an answer right away. */
 async function runBots(db: SupabaseClient, gameId: string) {
   const first = await loadGameById(db, gameId);
-  const seats = ok(await db.from("table_players").select("seat, profiles(is_bot)").eq("table_id", first.row.table_id)) as
-    { seat: number; profiles: { is_bot: boolean } }[];
-  const botSeats = new Set(seats.filter((p) => p.profiles.is_bot).map((p) => p.seat));
-  if (!botSeats.size) return;
+  const seats = ok(await db.from("table_players").select("seat, profiles(is_bot, bot_skill, bot_speed)").eq("table_id", first.row.table_id)) as
+    { seat: number; profiles: { is_bot: boolean; bot_skill: number | null; bot_speed: number | null } }[];
+  const bots = new Map(seats.filter((p) => p.profiles.is_bot).map((p) => [p.seat, { skill: p.profiles.bot_skill ?? 0.7, speed: p.profiles.bot_speed ?? 2 }]));
+  if (!bots.size) return;
   let ctx = first;
   for (let i = 0; i < 400; i++) {
     if (ctx.row.finished_at) return;
     const seat = ctx.g.turn(ctx.state);
-    if (seat === null || !botSeats.has(seat)) return;
-    const a = (ctx.g.botMove ?? ctx.g.autoMove)(ctx.state, seat);
+    const bot = seat === null ? undefined : bots.get(seat);
+    if (!bot) return;
+    // Thinking time: each bot has its own pace, and it varies from move to move
+    const drawing = ctx.state.phase === "draw";
+    const ms = bot.speed * 1000 * (drawing ? 0.55 : 0.8) * (0.6 + Math.random() * 0.9);
+    await sleep(Math.min(ms, 6000));
+    ctx = await loadGameById(db, gameId); // the game may have ended meanwhile (someone gave up)
+    if (ctx.row.finished_at || ctx.g.turn(ctx.state) !== seat) return;
+    const a = ctx.g.botMove ? ctx.g.botMove(ctx.state, seat, bot.skill) : ctx.g.autoMove(ctx.state, seat);
     if (!a) return;
     const next = ctx.g.applyAction(ctx.state, seat, a);
-    await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [seat]: 0 }, null);
+    try {
+      await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [seat]: 0 }, null);
+    } catch (e) {
+      if ((e as { code?: string })?.code === "40001") return; // another bot loop got there first
+      throw e;
+    }
     ctx = await loadGameById(db, gameId);
   }
 }
@@ -322,7 +346,7 @@ async function move(db: SupabaseClient, uid: string, gameId: string, action: unk
   if (ctx.row.finished_at) throw new UserError("Partiet är slut");
   const next = ctx.g.applyAction(ctx.state, ctx.seat, action);
   await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [ctx.seat]: 0 }, null);
-  await runBots(db, gameId);
+  background(runBots(db, gameId));
   return { ok: true };
 }
 
@@ -346,7 +370,7 @@ async function claimTimeout(db: SupabaseClient, uid: string, gameId: string) {
     next = g.applyAction(next, seat, a);
   }
   await persist(db, gameId, ctx, next, strikes, null);
-  await runBots(db, gameId);
+  background(runBots(db, gameId));
   return { auto: seat };
 }
 
