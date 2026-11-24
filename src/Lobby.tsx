@@ -4,6 +4,7 @@ import { leagueOf } from "../supabase/functions/_shared/rating";
 import { api, chips, DAILY_CHIPS, sb, STAKES, START_ELO, swedishToday, type Profile, type Rating, type Table, type Wallet } from "./lib";
 
 type Row = Rating & { profiles: { username: string } };
+const BOT_FILL_AFTER = 20; // seconds of quick-match search before bots fill the table
 
 export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => void }) {
   const ids = Object.keys(GAMES);
@@ -19,6 +20,8 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [searching, setSearching] = useState(false);
+  const [waitingTable, setWaitingTable] = useState<string | null>(null);
+  const [waited, setWaited] = useState(0);
   const [err, setErr] = useState("");
   const poll = useRef<number>();
 
@@ -49,21 +52,42 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   }
 
   async function quick() {
-    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake }));
+    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake, seats }));
     if (!r) return;
     if (!r.waiting) return onOpen(r.table.id);
     // We opened a table: wait for someone to sit down, and keep looking for others meanwhile
     setSearching(true);
     const myTable = r.table.id;
+    setWaitingTable(myTable);
+    setWaited(0);
+    const started = Date.now();
     window.clearInterval(poll.current);
     poll.current = window.setInterval(async () => {
+      const secs = Math.round((Date.now() - started) / 1000);
+      setWaited(secs);
+      // Nobody came: fill the table with bots so there is always a game
+      if (secs >= BOT_FILL_AFTER) {
+        window.clearInterval(poll.current);
+        const f = await run(() => api<{ table: Table }>("fill_bots", { tableId: myTable }));
+        if (f) onOpen(myTable);
+        return;
+      }
       const { data } = await sb.from("tables").select("status").eq("id", myTable).maybeSingle();
       if (data?.status === "playing") { window.clearInterval(poll.current); return onOpen(myTable); }
       try {
-        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake });
+        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake, seats });
         if (!again.waiting) { window.clearInterval(poll.current); onOpen(again.table.id); }
       } catch { /* keep waiting */ }
     }, 4000);
+  }
+
+  async function botsNow() {
+    window.clearInterval(poll.current);
+    setSearching(false);
+    const r = waitingTable
+      ? await run(() => api<{ table: Table }>("fill_bots", { tableId: waitingTable }))
+      : await run(() => api<{ table: Table }>("play_bots", { game, variant, seats }));
+    if (r) onOpen(r.table.id);
   }
 
   async function cancel() {
@@ -124,19 +148,32 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
           ))}
         </div>
         {stake > 0 && <p className="muted">Insats {chips(stake)} per spelare – vinnaren tar hela potten.</p>}
+        <div className="seg" role="radiogroup" aria-label="Antal spelare">
+          {mod.seatOptions.map((n) => (
+            <button key={n} role="radio" aria-checked={seats === n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>
+          ))}
+        </div>
         {searching ? (
-          <div className="row"><span className="pulse">Söker motståndare nära {elo}…</span><button className="ghost" onClick={cancel}>Avbryt</button></div>
+          <div className="col">
+            <span className="pulse">Söker {seats - 1 === 1 ? "en motståndare" : `${seats - 1} motståndare`} nära {elo}… {waited > 0 && `(${waited} s – botar tar över efter ${BOT_FILL_AFTER} s)`}</span>
+            <div className="row">
+              <button className="primary" onClick={botsNow}>Spela mot botar direkt</button>
+              <button className="ghost" onClick={cancel}>Avbryt</button>
+            </div>
+          </div>
         ) : (
-          <button className="primary big" onClick={quick}>Snabbmatch – rankad, 1 mot 1</button>
+          <div className="grid2">
+            <button className="primary big" onClick={quick}>Snabbmatch – rankad</button>
+            <button className="ghost big" onClick={botsNow}>Spela mot botar</button>
+          </div>
         )}
+        <p className="muted">Mot botar är det gratis och orankat.</p>
       </section>
 
       <section className="grid2">
         <div className="panel col">
           <h2>Med vänner</h2>
-          <div className="seg">
-            {mod.seatOptions.map((n) => <button key={n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>)}
-          </div>
+          <p className="muted">Privat bord för {seats} spelare. Lediga platser kan fyllas med botar.</p>
           <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats, stake })).then((r) => r && onOpen(r.table.id))}>
             Skapa privat bord
           </button>

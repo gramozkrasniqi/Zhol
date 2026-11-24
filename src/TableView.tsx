@@ -8,7 +8,8 @@ interface GameRow {
   id: string; public: { turn?: number }; turn_deadline: string | null; finished_at: string | null;
   outcome: { type: "forfeit"; seat: number; reason: "timeout" | "resign" } | null;
 }
-const CLAIM_AFTER_MS = 2000; // a little more than the server's grace, so claims are not rejected
+const CLAIM_AFTER_MS = 2000;
+const TURN_SECONDS = 45;   // must match the server // a little more than the server's grace, so claims are not rejected
 
 /** Platform shell around any game: waiting room, header, realtime sync, moves. */
 export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: string; onLeave: () => void }) {
@@ -102,7 +103,11 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
         </>}
         <p>{seats.length} av {table.seats} spelare: {seats.map((s) => s.username).join(", ")}</p>
         <p className="pulse">Väntar på spelare…</p>
-        <button className="ghost" onClick={leave}>Lämna bordet</button>
+        <div className="row">
+          <button className="primary" onClick={() => api("fill_bots", { tableId }).then(load).catch((e) => setErr(e.message))}>Fyll lediga platser med botar</button>
+          <button className="ghost" onClick={leave}>Lämna bordet</button>
+        </div>
+        {err && <p className="err">{err}</p>}
       </section>
     );
   }
@@ -126,7 +131,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
       {running && left !== null && turnSeat !== undefined && (
         <div className={`timer ${left <= 10 ? "low" : ""}`} role="timer" aria-live="off">
           <span>{turnSeat === mySeat ? "Din tur" : `Tur: ${nameOf(turnSeat)}`}</span>
-          <span className="bar-track"><span style={{ width: `${(left / 30) * 100}%` }} /></span>
+          <span className="bar-track"><span style={{ width: `${(left / TURN_SECONDS) * 100}%` }} /></span>
           <b>{left} s</b>
         </div>
       )}

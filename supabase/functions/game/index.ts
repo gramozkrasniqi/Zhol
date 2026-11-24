@@ -16,11 +16,12 @@ const json = (body: unknown, status = 200) =>
 class UserError extends Error {}
 const MATCH_WINDOW = 250; // accepted Elo difference in quick match
 const START_ELO = 1200;
-const TURN_SECONDS = 30;   // time per turn
+const TURN_SECONDS = 45;   // time per turn
 const GRACE_MS = 1500;     // slack for clock drift before a timeout may be claimed
 const MAX_STRIKES = 2;     // missed turns in a row before a player forfeits
 const STAKES = [0, 100, 500, 1000]; // allowed buy-ins per player (play chips, no cash value)
 const DAILY_CHIPS = 500;
+const BOT_NAMES = ["Arben", "Drita", "Besnik", "Mimoza", "Ilir", "Teuta", "Luan", "Vjosa", "Agon", "Blerta"];
 const deadlineFromNow = () => new Date(Date.now() + TURN_SECONDS * 1000).toISOString();
 
 Deno.serve(async (req) => {
@@ -37,7 +38,9 @@ Deno.serve(async (req) => {
       case "set_username": return json(await setUsername(db, uid, String(b.username ?? "")));
       case "create_table": return json(await createTable(db, uid, b.game ?? "zhol", b.variant, b.seats, false, b.stake));
       case "join_table": return json(await joinByCode(db, uid, String(b.code ?? "")));
-      case "quick_match": return json(await quickMatch(db, uid, b.game ?? "zhol", b.variant, b.stake));
+      case "quick_match": return json(await quickMatch(db, uid, b.game ?? "zhol", b.variant, b.stake, b.seats));
+      case "play_bots": return json(await playBots(db, uid, b.game ?? "zhol", b.variant, b.seats));
+      case "fill_bots": return json(await fillWithBots(db, uid, b.tableId));
       case "claim_daily": return json({ balance: ok(await db.rpc("claim_daily", { p_user: uid, p_amount: DAILY_CHIPS })) });
       case "leave_table": return json(await leaveTable(db, uid, b.tableId));
       case "next_round": return json(await nextRound(db, uid, b.tableId));
@@ -137,11 +140,12 @@ async function joinByCode(db: SupabaseClient, uid: string, code: string) {
   return seatPlayer(db, uid, t);
 }
 
-async function quickMatch(db: SupabaseClient, uid: string, game: string, variant: unknown, stake: unknown) {
+async function quickMatch(db: SupabaseClient, uid: string, game: string, variant: unknown, stake: unknown, seatsArg: unknown) {
   const g = moduleFor(game);
   const st = checkStake(stake);
   const v = String(variant ?? g.variants[0].id);
-  const seats = g.seatOptions[0];
+  const seats = Number(seatsArg ?? g.seatOptions[0]);
+  if (!g.seatOptions.includes(seats)) throw new UserError("Ogiltigt antal spelare");
   const since = new Date(Date.now() - 10 * 60_000).toISOString();
   const open = ok(await db.from("tables").select()
     .eq("status", "waiting").eq("ranked", true).eq("game", game).eq("variant", v).eq("seats", seats).eq("stake", st)
@@ -161,7 +165,7 @@ async function quickMatch(db: SupabaseClient, uid: string, game: string, variant
     }
   }
   const mine = ok(await db.from("tables").select().eq("host", uid).eq("status", "waiting").eq("ranked", true)
-    .eq("game", game).eq("variant", v).eq("stake", st).maybeSingle());
+    .eq("game", game).eq("variant", v).eq("stake", st).eq("seats", seats).maybeSingle());
   if (mine) return { table: mine, waiting: true };
   ok(await db.from("tables").delete().eq("host", uid).eq("status", "waiting").eq("ranked", true));
   return { ...(await createTable(db, uid, game, v, seats, true, st)), waiting: true };
@@ -196,7 +200,66 @@ async function startGame(db: SupabaseClient, tableId: string) {
   ok(await db.from("game_secrets").insert({ game_id: row.id, state }));
   ok(await db.from("game_hands").insert(players.map((p) => ({ game_id: row.id, user_id: p.user_id, seat: p.seat, cards: hands[p.seat] }))));
   ok(await db.from("tables").update({ status: "playing", game_id: row.id, round: t.round + 1 }).eq("id", tableId));
+  await runBots(db, row.id);
   return row;
+}
+
+/* ---------- Bots ---------- */
+
+/** Returns `n` bot accounts, creating them the first time they are needed. */
+async function ensureBots(db: SupabaseClient, n: number): Promise<string[]> {
+  const have = ok(await db.from("profiles").select("id").eq("is_bot", true).order("created_at").limit(n)) as { id: string }[];
+  const ids = have.map((b) => b.id);
+  while (ids.length < n) {
+    const i = ids.length;
+    const { data, error } = await db.auth.admin.createUser({
+      email: `bot-${crypto.randomUUID().slice(0, 8)}@bots.zhol.invalid`, email_confirm: true, user_metadata: { bot: true },
+    });
+    if (error || !data.user) throw error ?? new Error("Kunde inte skapa bot");
+    ok(await db.from("profiles").update({ is_bot: true, username: `${BOT_NAMES[i % BOT_NAMES.length]}${i >= BOT_NAMES.length ? i : ""} (bot)` }).eq("id", data.user.id));
+    ids.push(data.user.id);
+  }
+  return ids;
+}
+
+/** Fills the empty seats of a waiting table with bots and starts it. Bot games are free and unranked. */
+async function fillWithBots(db: SupabaseClient, uid: string, tableId: string) {
+  const t = ok(await db.from("tables").select().eq("id", tableId).single());
+  const players = ok(await db.from("table_players").select("user_id, seat").eq("table_id", tableId)) as { user_id: string; seat: number }[];
+  if (!players.some((p) => p.user_id === uid)) throw new UserError("Du sitter inte vid bordet");
+  if (t.status !== "waiting") return { table: t };
+  ok(await db.from("tables").update({ ranked: false, stake: 0 }).eq("id", tableId));
+  const taken = new Set(players.map((p) => p.seat));
+  const free = [...Array(t.seats).keys()].filter((s) => !taken.has(s));
+  const bots = (await ensureBots(db, t.seats)).filter((b) => !players.some((p) => p.user_id === b)).slice(0, free.length);
+  ok(await db.from("table_players").insert(free.map((seat, i) => ({ table_id: tableId, user_id: bots[i], seat }))));
+  await startGame(db, tableId);
+  return { table: { ...t, ranked: false, stake: 0 } };
+}
+
+async function playBots(db: SupabaseClient, uid: string, game: string, variant: unknown, seats: unknown) {
+  const { table } = await createTable(db, uid, game, variant, seats, false, 0);
+  return fillWithBots(db, uid, table.id);
+}
+
+/** Plays every bot turn in a row until it is a human's turn or the game ends. */
+async function runBots(db: SupabaseClient, gameId: string) {
+  const first = await loadGameById(db, gameId);
+  const seats = ok(await db.from("table_players").select("seat, profiles(is_bot)").eq("table_id", first.row.table_id)) as
+    { seat: number; profiles: { is_bot: boolean } }[];
+  const botSeats = new Set(seats.filter((p) => p.profiles.is_bot).map((p) => p.seat));
+  if (!botSeats.size) return;
+  let ctx = first;
+  for (let i = 0; i < 400; i++) {
+    if (ctx.row.finished_at) return;
+    const seat = ctx.g.turn(ctx.state);
+    if (seat === null || !botSeats.has(seat)) return;
+    const a = (ctx.g.botMove ?? ctx.g.autoMove)(ctx.state, seat);
+    if (!a) return;
+    const next = ctx.g.applyAction(ctx.state, seat, a);
+    await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [seat]: 0 }, null);
+    ctx = await loadGameById(db, gameId);
+  }
 }
 
 async function nextRound(db: SupabaseClient, uid: string, tableId: string) {
@@ -220,13 +283,18 @@ async function nextRound(db: SupabaseClient, uid: string, tableId: string) {
 type Outcome = { winner: number } | { forfeit: number; reason: "timeout" | "resign" };
 
 // deno-lint-ignore no-explicit-any
-async function loadGame(db: SupabaseClient, uid: string, gameId: string): Promise<any> {
-  const hand = ok(await db.from("game_hands").select("seat").eq("game_id", gameId).eq("user_id", uid).maybeSingle());
-  if (!hand) throw new UserError("Du är inte med i det här spelet");
+async function loadGameById(db: SupabaseClient, gameId: string): Promise<any> {
   const row = ok(await db.from("games")
     .select("version, table_id, rated, finished_at, turn_deadline, strikes, tables(game, seats, stake)").eq("id", gameId).single());
   const sec = ok(await db.from("game_secrets").select("state").eq("game_id", gameId).single());
-  return { seat: hand.seat, row, g: moduleFor(row.tables.game), state: sec.state };
+  return { row, g: moduleFor(row.tables.game), state: sec.state };
+}
+
+// deno-lint-ignore no-explicit-any
+async function loadGame(db: SupabaseClient, uid: string, gameId: string): Promise<any> {
+  const hand = ok(await db.from("game_hands").select("seat").eq("game_id", gameId).eq("user_id", uid).maybeSingle());
+  if (!hand) throw new UserError("Du är inte med i det här spelet");
+  return { seat: hand.seat, ...(await loadGameById(db, gameId)) };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -254,6 +322,7 @@ async function move(db: SupabaseClient, uid: string, gameId: string, action: unk
   if (ctx.row.finished_at) throw new UserError("Partiet är slut");
   const next = ctx.g.applyAction(ctx.state, ctx.seat, action);
   await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [ctx.seat]: 0 }, null);
+  await runBots(db, gameId);
   return { ok: true };
 }
 
@@ -277,6 +346,7 @@ async function claimTimeout(db: SupabaseClient, uid: string, gameId: string) {
     next = g.applyAction(next, seat, a);
   }
   await persist(db, gameId, ctx, next, strikes, null);
+  await runBots(db, gameId);
   return { auto: seat };
 }
 
@@ -288,7 +358,8 @@ async function resign(db: SupabaseClient, uid: string, gameId: string) {
 }
 
 async function settle(db: SupabaseClient, gameId: string, tableId: string, game: string, rated: boolean, res: Outcome, stake: number) {
-  const players = ok(await db.from("table_players").select("user_id, seat").eq("table_id", tableId).order("seat")) as { user_id: string; seat: number }[];
+  const players = ok(await db.from("table_players").select("user_id, seat, profiles(is_bot)").eq("table_id", tableId).order("seat")) as
+    { user_id: string; seat: number; profiles: { is_bot: boolean } }[];
   const uids = players.map((p) => p.user_id);
   const rows = ok(await db.from("ratings").select().eq("game", game).in("user_id", uids)) as { user_id: string; elo: number; games: number; wins: number }[];
   const cur = new Map(rows.map((r) => [r.user_id, r]));
@@ -302,13 +373,13 @@ async function settle(db: SupabaseClient, gameId: string, tableId: string, game:
     else if ("forfeit" in res) deltas = forfeitDeltas(before, idx(res.forfeit));
   }
   if (winner >= 0 && idx(winner) < 0) winner = -1;
-  const upserts = players.map((p, i) => ({
-    user_id: p.user_id, game, elo: before[i] + deltas[i],
+  const upserts = players.filter((p) => !p.profiles.is_bot).map((p) => ({
+    user_id: p.user_id, game, elo: before[idx(p.seat)] + deltas[idx(p.seat)],
     games: (cur.get(p.user_id)?.games ?? 0) + 1,
     wins: (cur.get(p.user_id)?.wins ?? 0) + (p.seat === winner ? 1 : 0),
     updated_at: new Date().toISOString(),
   }));
-  ok(await db.from("ratings").upsert(upserts));
+  if (upserts.length) ok(await db.from("ratings").upsert(upserts));
 
   // Chips: the winner takes the pot; a draw refunds; a multi-player forfeit splits the pot among the rest
   if (stake > 0) {
@@ -326,8 +397,8 @@ async function settle(db: SupabaseClient, gameId: string, tableId: string, game:
     } else for (const p of players) await pay(p.user_id, stake, "refund");
   }
   if (rated) {
-    ok(await db.from("elo_history").insert(players.map((p, i) => ({
-      user_id: p.user_id, game_id: gameId, game, elo_before: before[i], elo_after: before[i] + deltas[i],
+    ok(await db.from("elo_history").insert(players.filter((p) => !p.profiles.is_bot).map((p) => ({
+      user_id: p.user_id, game_id: gameId, game, elo_before: before[idx(p.seat)], elo_after: before[idx(p.seat)] + deltas[idx(p.seat)],
     }))));
   }
 }

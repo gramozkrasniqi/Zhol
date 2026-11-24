@@ -122,3 +122,35 @@ describe("tidsgräns och avhopp", () => {
     expect(forfeitDeltas([1200, 1200], 0)).toEqual([-16, 16]);
   });
 });
+
+describe("större bord och botar", () => {
+  it("6 och 8 spelare får en extra kortlek", () => {
+    const g = GAMES.zhol;
+    for (const [v, n, hand] of [["small", 8, 7], ["big", 8, 14], ["small", 6, 7], ["big", 6, 14]] as const) {
+      const s = g.newGame(v, n, 0);
+      expect(s.hands).toHaveLength(n);
+      expect(s.hands.every((h: Card[]) => h.length === hand)).toBe(true);
+      expect(s.stock.length).toBeGreaterThan(5);
+    }
+  });
+  it("botar spelar hela partier till slut utan ogiltiga drag", () => {
+    const g = GAMES.zhol;
+    for (const [v, n] of [["small", 2], ["small", 8], ["big", 4]] as const) {
+      let s = g.newGame(v, n, 0);
+      let moves = 0;
+      while (!g.result(s) && moves < 4000) {
+        const seat = g.turn(s)!;
+        s = g.applyAction(s, seat, g.botMove!(s, seat));
+        moves++;
+      }
+      expect(g.result(s)).not.toBeNull();
+    }
+  });
+  it("boten ropar Zhol när handen går ihop", () => {
+    const g = GAMES.zhol;
+    const s = g.newGame("small", 2, 0);
+    s.hands[0] = [C(5, 0), C(5, 1), C(5, 2), C(9, 3), C(10, 3), C(11, 3), C(2, 1), C(12, 3)];
+    s.phase = "discard";
+    expect(g.botMove!(s, 0)).toEqual({ type: "zhol" });
+  });
+});

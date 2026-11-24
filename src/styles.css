@@ -64,3 +64,4 @@ button[disabled]{opacity:.4;cursor:default}
 .banner{justify-content:space-between;font-weight:600}
 .daily{min-height:52px}
 .center{text-align:center}
+.ghost.big{min-height:56px;font-size:18px}

@@ -35,10 +35,12 @@ export function shuffle<T>(a: T[], rnd: () => number = Math.random): T[] {
   return a;
 }
 
-export function makeDeck(variant: Variant, rnd?: () => number): Card[] {
+/** Decks in play: 1 (vogël) or 2 (madh), plus one more at tables with more than 4 players. */
+export const deckCount = (variant: Variant, seats: number) => (variant === "big" ? 2 : 1) + (seats > 4 ? 1 : 0);
+
+export function makeDeck(variant: Variant, rnd?: () => number, decks = deckCount(variant, 2)): Card[] {
   const d: Card[] = [];
   let id = 0;
-  const decks = variant === "big" ? 2 : 1;
   for (let k = 0; k < decks; k++) {
     for (let s = 0; s < 4; s++) for (let r = 1; r <= 13; r++) d.push({ id: id++, r, s });
     d.push({ id: id++, j: 1 }, { id: id++, j: 1 });
@@ -47,8 +49,8 @@ export function makeDeck(variant: Variant, rnd?: () => number): Card[] {
 }
 
 export function newGame(variant: Variant, seats: number, starter = 0, rnd?: () => number): GameState {
-  if (seats < 2 || seats > 4) throw new Error("2–4 spelare");
-  const stock = makeDeck(variant, rnd);
+  if (seats < 2 || seats > 8) throw new MoveError("2–8 spelare");
+  const stock = makeDeck(variant, rnd, deckCount(variant, seats));
   const hands = Array.from({ length: seats }, () => stock.splice(0, HAND_SIZE[variant]));
   const discard = [stock.pop()!];
   return {
@@ -204,7 +206,7 @@ export const zhol: GameModule<GameState, Action, PublicState, Card[]> = {
     { id: "small", label: "Zhol i vogël · 7 kort" },
     { id: "big", label: "Zhol i madh · 14 kort" },
   ],
-  seatOptions: [2, 4],
+  seatOptions: [2, 4, 6, 8],
   newGame: (variant, seats, starter) => {
     if (variant !== "small" && variant !== "big") throw new MoveError("Ogiltig variant");
     return newGame(variant, seats, starter);
@@ -221,4 +223,45 @@ export const zhol: GameModule<GameState, Action, PublicState, Card[]> = {
     const pick = [...s.hands[seat]].reverse().find((c) => c.id !== s.taken)!;
     return { type: "discard", cardId: pick.id };
   },
+  botMove,
 };
+
+/* ---------- Computer player ---------- */
+const hi = (r: number) => (r === 1 ? 14 : r);
+/** How much a card helps the rest of the hand: pairs, neighbours in suit, jokers. */
+function usefulness(c: Card, hand: Card[]): number {
+  if (c.j) return 99;
+  let u = 0;
+  for (const o of hand) {
+    if (o === c || o.j) continue;
+    if (o.r === c.r && o.s !== c.s) u += 3;
+    if (o.s === c.s && o.r !== c.r) {
+      const d = Math.min(Math.abs(o.r! - c.r!), Math.abs(hi(o.r!) - hi(c.r!)));
+      if (d === 1) u += 3;
+      else if (d === 2) u += 1.5;
+    }
+  }
+  return u;
+}
+
+export function botMove(s: GameState, seat: number): Action | null {
+  if (s.phase === "over" || s.turn !== seat) return null;
+  const hand = s.hands[seat];
+  const small = s.variant === "small";
+  if (s.phase === "draw") {
+    const top = s.discard[s.discard.length - 1];
+    // Take the open card if it completes the hand or clearly fits
+    if (top && (top.j || findWin([...hand, top], top.id, small) || usefulness(top, [...hand, top]) >= 3)) {
+      return { type: "draw", from: "discard" };
+    }
+    return { type: "draw", from: "stock" };
+  }
+  if (findWin(hand, s.taken, small)) return { type: "zhol" };
+  let worst: Card | null = null, low = Infinity;
+  for (const c of hand) {
+    if (c.id === s.taken) continue;
+    const u = usefulness(c, hand);
+    if (u < low) { low = u; worst = c; }
+  }
+  return { type: "discard", cardId: worst!.id };
+}
