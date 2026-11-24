@@ -41,9 +41,9 @@ export function Finale({ pub, mySeat, seats, pot, ranked, eloBefore, onNext, onL
         <i key={i} className="paychip" style={{ ...toWinner, animationDelay: `${0.9 + i * 0.07}s` }} />
       )) : null}
       <div className="finale-card">
-        <h3>{winner < 0 ? "Oavgjort" : iWon ? "Zhol! Du vann" : `${name(winner)} gjorde Zhol`}</h3>
+        <h3>{winner < 0 ? "Oavgjort" : pub.points ? (iWon ? "Du är sist kvar – du vann!" : `${name(winner)} är sist kvar och vinner`) : iWon ? "Zhol! Du vann" : `${name(winner)} gjorde Zhol`}</h3>
         {winner < 0 && <p className="muted">Högen tog slut innan någon fick ihop handen.</p>}
-        {pub.winGroups && (
+        {pub.winGroups && (!pub.points || pub.points.last?.closer === winner) && (
           <div className="win-groups">
             {pub.winGroups.map((g, gi) => (
               <div key={gi} className="wg">

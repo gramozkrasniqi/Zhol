@@ -7,6 +7,7 @@ import { Back, CardView } from "./Card";
 import { AvatarFace } from "../../Avatar";
 import { analyseHand, smartGroups, sortRank, sortSuit } from "./sortHand";
 import { Finale } from "./Finale";
+import { RoundBoard } from "./RoundBoard";
 import { cardSound, setSound, soundOn } from "./sound";
 
 /** Where a seat sits around the oval. The player is always at the bottom; the radius lives in CSS. */
@@ -225,7 +226,9 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
 
   /* ---------- Rules for what the player may do now ---------- */
   const over = ended || pub.phase === "over";
-  const myTurn = !over && pub.turn === mySeat;
+  const P = pub.points;
+  const between = !over && pub.phase === "break";
+  const myTurn = !over && !between && pub.turn === mySeat;
   const canWin = myTurn && pub.phase === "discard" && !!findWin(hand, pub.taken, pub.variant === "small");
   const name = (seat: number) => (seats.find((s) => s.seat === seat)?.username ?? "…").replace(" (bot)", "");
   const drawOpen = myTurn && pub.phase === "draw" && !busy;
@@ -310,13 +313,15 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const status = ended ? "Partiet är slut."
     : pub.phase === "over"
       ? pub.winner === -1 ? "Högen tog slut – oavgjort." : pub.winner === mySeat ? "Zhol! Du vann." : `${name(pub.winner!)} gjorde Zhol.`
+      : between ? `Runda ${P!.last?.round ?? P!.round} är klar.`
+      : P?.out[mySeat] ? `Du är ute – ${name(pub.turn)} spelar…`
       : myTurn
         ? pub.phase === "draw" ? "Din tur – ta ett kort" : canWin ? "Du har Zhol!" : "Kasta ett kort"
         : `${name(pub.turn)} spelar…`;
 
   const total = pub.seats;
   const ring = (seat: number): CSSProperties | undefined =>
-    !over && pub.turn === seat && timeLeft != null
+    !over && !between && pub.turn === seat && timeLeft != null
       ? ({ "--p": `${Math.max(0, Math.min(1, timeLeft / turnSeconds)) * 360}deg` } as CSSProperties)
       : undefined;
 
@@ -355,19 +360,21 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
             {canWin && !busy
               ? <button className="zhol-call" onClick={() => act({ type: "zhol" })}>Zhol!</button>
               : <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>}
+            {P && <div className="round-tag">Runda {P.round} · till 101</div>}
             {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")} Lek</div> : null}
           </div>
         </div></div>
 
         {seats.map((s) => {
           const offset = (s.seat - mySeat + total) % total;
-          const active = !over && pub.turn === s.seat;
+          const active = !over && !between && pub.turn === s.seat;
+          const out = !!P?.out[s.seat];
           const won = pub.phase === "over" && pub.winner === s.seat;
           const isBot = s.username.endsWith("(bot)");
           const label = isBot ? s.username.replace(" (bot)", "") : s.username;
           return (
             <div key={s.seat} ref={(el) => { if (el) seatRefs.current.set(s.seat, el); else seatRefs.current.delete(s.seat); }}
-              className={`seat ${offset === 0 ? "me" : ""} ${active ? "active" : ""} ${won ? "won" : ""}`} style={seatPosition(offset, total)}>
+              className={`seat ${offset === 0 ? "me" : ""} ${active ? "active" : ""} ${won ? "won" : ""} ${out ? "out" : ""}`} style={seatPosition(offset, total)}>
               <div className="avatar" style={ring(s.seat)}>
                 <span className="face"><AvatarFace who={s} /></span>
                 {active && timeLeft != null && <b className="secs">{timeLeft}</b>}
@@ -375,9 +382,11 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
               </div>
               <div className="plate">
                 <span className="nm">{offset === 0 ? "Du" : label}{isBot && <em>bot</em>}</span>
-                <span className="meta">{isBot
-                  ? <>{botLevel(s.botSkill)}, </>
-                  : <span className="elo">{s.elo} Elo, </span>}{pub.handCounts[s.seat] ?? 0} kort</span>
+                <span className="meta">{P
+                  ? <><b className="score">{P.scores[s.seat]} p</b>{out ? ", ute" : `, ${pub.handCounts[s.seat] ?? 0} kort`}</>
+                  : <>{isBot
+                    ? <>{botLevel(s.botSkill)}, </>
+                    : <span className="elo">{s.elo} Elo, </span>}{pub.handCounts[s.seat] ?? 0} kort</>}</span>
               </div>
               {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
             </div>
@@ -393,6 +402,11 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
             </div>
           );
         })}
+        {between && (
+          <RoundBoard pub={pub} mySeat={mySeat} seats={seats} timeLeft={timeLeft} busy={busy}
+            onNext={() => act({ type: "next" })} onRebuy={() => act({ type: "rebuy" })}
+            stakeNote={pot ? "kostar insatsen igen" : undefined} />
+        )}
         {pub.phase === "over" && !ended && (
           <Finale pub={pub} mySeat={mySeat} seats={seats} eloBefore={eloBefore.current.get(mySeat)} pot={pot} ranked={!!ranked} onNext={nextRound} onLeave={onLeave} />
         )}
@@ -408,9 +422,9 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
         ))}
       </div>
       <div className="handbar">
-        <span className={`progress ${over ? "off" : ""}`} aria-live="polite">
+        <span className={`progress ${over || between ? "off" : ""}`} aria-live="polite">
           <span className="meter" style={{ "--v": inGroups / needed } as CSSProperties}><i /></span>
-          {over ? "" : inGroups === 0 ? "Inga färdiga grupper än" : `${inGroups} av ${needed} kort i färdiga grupper`}
+          {over || between ? "" : inGroups === 0 ? "Inga färdiga grupper än" : `${inGroups} av ${needed} kort i färdiga grupper`}
         </span>
         <span className="tools">
           <button onClick={cycleSort} aria-label={`Sortera handen, nu: ${sortIdx < 0 ? "egen ordning" : SORTS[sortIdx].label}`}>

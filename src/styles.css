@@ -503,3 +503,33 @@ button:not([disabled]):active{transform:scale(.97)}
 .drink-pick button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;min-height:84px;border-radius:16px;background:#00000030;border:1px solid var(--line);font-size:13px}
 .drink-pick button.on{border-color:var(--brass);background:#f0bd621f;box-shadow:inset 0 0 0 1px var(--brass)}
 @media(max-width:640px){.drink{width:32px}.eagle{width:96%}}
+
+/* ---------- Points mode: till 101 ---------- */
+.round-tag{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--ivory);background:#1e120bb3;border:1px solid #ffffff1a;padding:3px 10px;border-radius:999px}
+.seat.out{opacity:.45;filter:grayscale(.7)}
+.seat .meta .score{color:var(--brass);font-weight:700}
+.modes .variant span{font-size:12px}
+.roundboard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;width:min(560px,94%);max-height:92%;overflow:auto;
+  padding:18px 18px 14px;border-radius:22px;background:#24170fef;backdrop-filter:blur(8px);border:1px solid #f0bd6233;
+  box-shadow:0 30px 60px -20px #000,inset 0 1px 0 #ffffff14;animation:rb-in .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes rb-in{from{opacity:0;transform:translate(-50%,-46%) scale(.97)}}
+.roundboard h3{margin:0;font-family:var(--display);font-size:22px}
+.roundboard .sub{margin:2px 0 12px;color:var(--muted);font-size:14px}
+.roundboard .scores{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.roundboard li{display:grid;grid-template-columns:minmax(80px,1.1fr) 2fr 44px 44px;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;background:#ffffff08;position:relative;overflow:hidden}
+.roundboard li.me{background:#f0bd6214;box-shadow:inset 0 0 0 1px #f0bd6244}
+.roundboard li.out{opacity:.6}
+.roundboard li.closer .who::after{content:'Zhol';margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:var(--brass);color:#2a160b}
+.roundboard .who{font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-width:0}
+.roundboard .who em{font-style:normal;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:#c8102e;color:#fff}
+.roundboard .who em.re{background:#ffffff22}
+.roundboard .loose{display:flex;flex-wrap:wrap;gap:2px;min-height:20px}
+.roundboard .mini{--cw:24px;display:inline-block;pointer-events:none}
+.roundboard .d{text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:var(--muted)}
+.roundboard .d.pos{color:#ff8a7a}.roundboard .d.neg{color:#8fe0a8}
+.roundboard .tot{text-align:right;font-variant-numeric:tabular-nums;font-size:18px;font-family:var(--display)}
+.roundboard .bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#ffffff0d}
+.roundboard .bar i{display:block;height:100%;background:linear-gradient(90deg,#8fe0a8,#f0bd62 60%,#c8102e)}
+.roundboard .row{display:flex;justify-content:center;gap:8px;position:sticky;bottom:-14px;padding:10px 0 4px;background:linear-gradient(transparent,#24170f 30%)}
+.roundboard .fine{text-align:center;margin:8px 0 0}
+@media(max-width:640px){.roundboard li{grid-template-columns:1fr 38px 38px}.roundboard .loose{grid-column:1/-1;order:5}}

@@ -14,6 +14,9 @@ const TURN_SECONDS = 45;   // must match the server
 const BUBBLE_MS = 5000;    // how long a chat line stays above a seat
 
 /** Platform shell around any game: waiting room, header, realtime sync, moves. */
+/** Extra stakes paid by players who bought in again (points mode). */
+const buyIns = (p: unknown) => ((p as { points?: { rebuys: number[] } })?.points?.rebuys ?? []).reduce((t, n) => t + n, 0);
+
 export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: string; onLeave: () => void }) {
   const [table, setTable] = useState<Table | null>(null);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
@@ -175,7 +178,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
       )}
       <p className="rotate-tip" aria-hidden="true">Vrid telefonen för ett större bord</p>
       {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
-          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} bubbles={bubbles}
+          timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * (table.seats + buyIns(game.public)) : undefined} bubbles={bubbles}
           ranked={table.ranked} onLeave={leave} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}

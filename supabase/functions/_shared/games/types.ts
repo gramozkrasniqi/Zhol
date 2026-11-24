@@ -13,7 +13,7 @@ export interface GameModule<S = unknown, A = unknown, P = unknown, H = unknown> 
   publicView(state: S): P;                      // safe for every player to see
   hands(state: S): H[];                         // private part per seat
   /** null while running; winner = seat index, or -1 for a draw */
-  result(state: S): { winner: number } | null;
+  result(state: S): { winner: number; buyIns?: number } | null;
   /** Whose turn it is, or null when the game is over. Drives the turn timer. */
   turn(state: S): number | null;
   /** One move the server plays for `seat` when its turn timer runs out (repeated until the turn passes). */
@@ -21,6 +21,11 @@ export interface GameModule<S = unknown, A = unknown, P = unknown, H = unknown> 
   /** One move for a computer player (repeated until the turn passes). Falls back to autoMove if absent.
    *  skill: 0 (beginner) – 1 (expert); lower skill should make more mistakes. */
   botMove?(state: S, seat: number, skill?: number): A | null;
+  /** Games of several rounds: the player who gives up or times out is out, but the others play on.
+   *  Returns the new state, or null when the game simply ends with that forfeit. */
+  forfeit?(state: S, seat: number): S | null;
+  /** True between rounds: the turn timer then starts the next round instead of counting a missed turn. */
+  intermission?(state: S): boolean;
 }
 
 /** Throw this (or a subclass) for an illegal move; its message is shown to the player. */

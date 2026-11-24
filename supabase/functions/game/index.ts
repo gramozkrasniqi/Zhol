@@ -305,7 +305,7 @@ async function nextRound(db: SupabaseClient, uid: string, tableId: string) {
   return { table: t };
 }
 
-type Outcome = { winner: number } | { forfeit: number; reason: "timeout" | "resign" };
+type Outcome = { winner: number; buyIns?: number } | { forfeit: number; reason: "timeout" | "resign" };
 
 // deno-lint-ignore no-explicit-any
 async function loadGameById(db: SupabaseClient, gameId: string): Promise<any> {
@@ -327,7 +327,8 @@ async function persist(db: SupabaseClient, gameId: string, ctx: any, next: unkno
   const { row, g, state } = ctx;
   const res = outcome ?? g.result(next);
   const over = !!res;
-  const turnChanged = g.turn(next) !== g.turn(state);
+  // A new turn – or the start or end of a break between rounds – gets a fresh clock
+  const turnChanged = g.turn(next) !== g.turn(state) || !!g.intermission?.(next) !== !!g.intermission?.(state);
   const deadline = over ? null : turnChanged || !row.turn_deadline ? deadlineFromNow() : row.turn_deadline;
   ok(await db.rpc("save_game", {
     p_game: gameId, p_version: row.version, p_public: g.publicView(next), p_state: next,
@@ -346,9 +347,34 @@ async function move(db: SupabaseClient, uid: string, gameId: string, action: unk
   const ctx = await loadGame(db, uid, gameId);
   if (ctx.row.finished_at) throw new UserError("Partiet är slut");
   const next = ctx.g.applyAction(ctx.state, ctx.seat, action);
-  await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [ctx.seat]: 0 }, null);
+  // Buying in again costs the table's stake once more; it goes into the pot
+  const stake = ctx.row.tables.stake ?? 0;
+  const rebuy = (action as { type?: string })?.type === "rebuy" && stake > 0;
+  const ref = crypto.randomUUID();
+  if (rebuy) {
+    if ((await balanceOf(db, uid)) < stake) throw new UserError(`Du behöver ${stake} Lek för att köpa in dig igen`);
+    ok(await db.rpc("chip_move", { p_user: uid, p_delta: -stake, p_reason: "stake", p_ref: ref }));
+  }
+  try {
+    await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [ctx.seat]: 0 }, null);
+  } catch (e) {
+    if (rebuy) await db.rpc("chip_move", { p_user: uid, p_delta: stake, p_reason: "refund", p_ref: ref });
+    throw e;
+  }
   background(runBots(db, gameId));
   return { ok: true };
+}
+
+/** A forfeit: in games of several rounds the player is out and the others play on. */
+// deno-lint-ignore no-explicit-any
+async function forfeitSeat(db: SupabaseClient, gameId: string, ctx: any, seat: number, strikes: Record<string, number>, reason: "timeout" | "resign") {
+  const cont = ctx.g.forfeit?.(ctx.state, seat);
+  if (cont) {
+    await persist(db, gameId, ctx, cont, { ...strikes, [seat]: 0 }, null);
+    background(runBots(db, gameId));
+    return;
+  }
+  await persist(db, gameId, ctx, ctx.state, strikes, { forfeit: seat, reason });
 }
 
 /** Any player at the table may call this once the current player's time is up. */
@@ -359,9 +385,16 @@ async function claimTimeout(db: SupabaseClient, uid: string, gameId: string) {
   if (!row.turn_deadline || Date.now() < new Date(row.turn_deadline).getTime() + GRACE_MS) throw new UserError("Tiden är inte slut än");
   const seat = g.turn(ctx.state);
   if (seat === null) return { ok: true };
+  // Between rounds nobody has missed a turn: the time is simply up and the next round is dealt
+  if (g.intermission?.(ctx.state)) {
+    const a = g.autoMove(ctx.state, seat);
+    if (a) await persist(db, gameId, ctx, g.applyAction(ctx.state, seat, a), row.strikes ?? {}, null);
+    background(runBots(db, gameId));
+    return { next: true };
+  }
   const strikes = { ...row.strikes, [seat]: (row.strikes?.[seat] ?? 0) + 1 };
   if (strikes[seat] >= MAX_STRIKES) {
-    await persist(db, gameId, ctx, ctx.state, strikes, { forfeit: seat, reason: "timeout" });
+    await forfeitSeat(db, gameId, ctx, seat, strikes, "timeout");
     return { forfeit: seat };
   }
   let next = ctx.state;
@@ -378,7 +411,7 @@ async function claimTimeout(db: SupabaseClient, uid: string, gameId: string) {
 async function resign(db: SupabaseClient, uid: string, gameId: string) {
   const ctx = await loadGame(db, uid, gameId);
   if (ctx.row.finished_at) return { ok: true };
-  await persist(db, gameId, ctx, ctx.state, ctx.row.strikes, { forfeit: ctx.seat, reason: "resign" });
+  await forfeitSeat(db, gameId, ctx, ctx.seat, ctx.row.strikes ?? {}, "resign");
   return { ok: true };
 }
 
@@ -408,7 +441,7 @@ async function settle(db: SupabaseClient, gameId: string, tableId: string, game:
 
   // Chips: the winner takes the pot; a draw refunds; a multi-player forfeit splits the pot among the rest
   if (stake > 0) {
-    const pot = stake * players.length;
+    const pot = stake * (players.length + ("buyIns" in res ? res.buyIns ?? 0 : 0));
     const pay = async (user: string, amount: number, reason: "payout" | "refund") => {
       if (amount <= 0) return;
       const r = await db.rpc("chip_move", { p_user: user, p_delta: amount, p_reason: reason, p_ref: gameId });

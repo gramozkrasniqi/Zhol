@@ -16,6 +16,8 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
   const [game, setGame] = useState(ids[0]);
   const mod = GAMES[game];
   const [variant, setVariant] = useState(mod.variants[0].id);
+  const hasPoints = mod.variants.some((v) => v.id.endsWith("-p"));
+  const pointsMode = variant.endsWith("-p");
   const [seats, setSeats] = useState(mod.seatOptions[0]);
   const [me, setMe] = useState<Profile | null>(null);
   const [rating, setRating] = useState<Rating | null>(null);
@@ -240,16 +242,30 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
           <fieldset>
             <legend>Variant</legend>
             <div className="variants" role="radiogroup" aria-label="Variant">
-              {mod.variants.map((v) => {
+              {mod.variants.filter((v) => !v.id.endsWith("-p")).map((v) => {
                 const [title, sub] = v.label.split(" · ");
+                const on = variant.replace(/-p$/, "") === v.id;
                 return (
-                  <button key={v.id} role="radio" aria-checked={variant === v.id} className={`variant ${variant === v.id ? "on" : ""}`} onClick={() => setVariant(v.id)}>
+                  <button key={v.id} role="radio" aria-checked={on} className={`variant ${on ? "on" : ""}`} onClick={() => setVariant(v.id + (pointsMode ? "-p" : ""))}>
                     <b>{title}</b><span>{sub}</span>
                   </button>
                 );
               })}
             </div>
           </fieldset>
+          {hasPoints && (
+            <fieldset>
+              <legend>Spelsätt</legend>
+              <div className="variants modes" role="radiogroup" aria-label="Spelsätt">
+                <button role="radio" aria-checked={!pointsMode} className={`variant ${!pointsMode ? "on" : ""}`} onClick={() => setVariant(variant.replace(/-p$/, ""))}>
+                  <b>Snabb</b><span>En runda, den som gör Zhol vinner</span>
+                </button>
+                <button role="radio" aria-checked={pointsMode} className={`variant ${pointsMode ? "on" : ""}`} onClick={() => setVariant(variant.replace(/-p$/, "") + "-p")}>
+                  <b>Till 101</b><span>Poäng för lösa kort, sista kvar tar potten</span>
+                </button>
+              </div>
+            </fieldset>
+          )}
           <fieldset>
             <legend>Spelare</legend>
             <div className="seats-pick" role="radiogroup" aria-label="Antal spelare">
@@ -271,7 +287,7 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
                 </button>
               ))}
             </div>
-            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} Lek. Vinnaren tar allt.`}</p>
+            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} Lek. ${pointsMode ? "Sista kvar tar allt. Den som köper in sig igen betalar insatsen en gång till." : "Vinnaren tar allt."}`}</p>
           </fieldset>
         </div>
       </section>
