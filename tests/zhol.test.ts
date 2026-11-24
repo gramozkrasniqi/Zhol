@@ -19,8 +19,8 @@ describe("grupplösare", () => {
   it("K-A-2 gäller inte", () => {
     expect(findGroups([C(13, 0), C(1, 0), C(2, 0), C(9, 3), C(10, 3), C(11, 3), C(12, 3)], true)).toBeNull();
   });
-  it("samma färg två gånger i ett set gäller inte", () => {
-    expect(findGroups([C(5, 0), C(5, 0), C(5, 1), C(9, 3), C(10, 3), C(11, 3), C(12, 3)], true)).toBeNull();
+  it("samma färg två gånger i ett set gäller (husregel: färgen spelar ingen roll)", () => {
+    expect(findGroups([C(5, 0), C(5, 0), C(5, 1), C(9, 3), C(10, 3), C(11, 3), C(12, 3)], true)).not.toBeNull();
   });
   it("bara xhola är ingen grupp", () => {
     expect(findGroups([J(), J(), J()], true)).toBeNull();  });
@@ -241,5 +241,17 @@ describe("poängläge", () => {
     s = Z.newGame("small-p", 4, 0);
     expect(s.points).toBeTruthy();
     expect(Z.newGame("big", 2, 0).points).toBeUndefined();
+  });
+});
+
+describe("triss med två likadana kort", () => {
+  it("9♥ 9♥ 9♠ räknas som triss (två kortlekar)", () => {
+    const g = findGroups([PC(9, 0, 1), PC(9, 0, 2), PC(9, 1, 3)], false);
+    expect(g).not.toBeNull();
+    expect(findGroups([PC(6, 0, 4), PC(6, 2, 5), PC(6, 1, 6), PC(6, 0, 7)], false)).not.toBeNull();
+  });
+  it("handen från skärmdumpen: sexor, ess och nior ger 10 av 10 med ett kort över", () => {
+    const hand = [PC(6, 0, 1), PC(6, 2, 2), PC(6, 1, 3), PC(1, 3, 4), PC(1, 1, 5), PC(1, 2, 6), PC(9, 0, 7), PC(9, 0, 8), PC(9, 1, 9), PC(6, 0, 10)];
+    expect(findGroups(hand, false)).not.toBeNull();
   });
 });

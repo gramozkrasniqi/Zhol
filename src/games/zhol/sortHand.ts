@@ -9,18 +9,14 @@ export const sortSuit = (h: Card[]) => [...h].sort((a, b) => (a.j ? 1 : 0) - (b.
 export const sortRank = (h: Card[]) =>
   [...h].sort((a, b) => (a.j ? 1 : 0) - (b.j ? 1 : 0) || (a.j ? 0 : hi(a.r!) - hi(b.r!) || a.s! - b.s!));
 
-/** Longest set (same rank, different suits) or run (same suit in sequence) among `cards`. */
+/** Longest set (same rank, any suits) or run (same suit in sequence) among `cards`. */
 function bestMeld(cards: Card[], min: number, maxRun: number): Card[] | null {
   let best: Card[] | null = null;
   const take = (g: Card[]) => { if (g.length >= min && (!best || g.length > best.length)) best = g; };
   // Sets
-  const ranks = new Map<number, Map<number, Card>>();
-  for (const c of cards) {
-    const m = ranks.get(c.r!) ?? new Map();
-    if (!m.has(c.s!)) m.set(c.s!, c);
-    ranks.set(c.r!, m);
-  }
-  for (const m of ranks.values()) take([...m.values()].slice(0, 4));
+  const ranks = new Map<number, Card[]>();
+  for (const c of cards) ranks.set(c.r!, [...(ranks.get(c.r!) ?? []), c]);
+  for (const m of ranks.values()) take(m.slice(0, 4));
   // Runs (ace can be low or high)
   for (let s = 0; s < 4; s++) {
     const at = new Map<number, Card>();
@@ -40,7 +36,7 @@ function bestPartial(cards: Card[]): Card[] | null {
   for (let i = 0; i < cards.length; i++)
     for (let k = i + 1; k < cards.length; k++) {
       const a = cards[i], b = cards[k];
-      if (a.r === b.r && a.s !== b.s) return [a, b];
+      if (a.r === b.r) return [a, b];
       if (a.s === b.s) {
         const d = Math.min(Math.abs(a.r! - b.r!), Math.abs(hi(a.r!) - hi(b.r!)));
         if (d >= 1 && d <= 2) return [a, b].sort(bySuit);

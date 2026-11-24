@@ -18,7 +18,7 @@ export function Rules({ onExit, onTutorial }: { onExit: () => void; onTutorial: 
 
         <h3>Grupper</h3>
         <div className="rule-grid">
-          <div><Row cards={[c(12, 0, 1), c(12, 2, 2), c(12, 3, 3)]} /><p><b>Lika:</b> 3 eller 4 kort med samma valör, alla i olika färger.</p></div>
+          <div><Row cards={[c(12, 0, 1), c(12, 2, 2), c(12, 3, 3)]} /><p><b>Lika:</b> 3 eller 4 kort med samma valör, i vilka färger som helst (två likadana kort går bra).</p></div>
           <div><Row cards={[c(5, 1, 4), c(6, 1, 5), c(7, 1, 6), c(8, 1, 7)]} /><p><b>Serie:</b> 3 eller fler kort i följd, i samma färg.</p></div>
           <div><Row cards={[c(9, 0, 8), J, c(11, 0, 9)]} /><p><b>Xhol</b> (jokern) kan ersätta vilket kort som helst.</p></div>
           <div><Row cards={[c(12, 2, 10), c(13, 2, 11), c(1, 2, 12)]} /><p><b>Ess</b> kan vara lågt (A-2-3) eller högt (Q-K-A), men inte båda samtidigt.</p></div>
