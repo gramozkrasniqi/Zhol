@@ -269,8 +269,9 @@ async function runBots(db: SupabaseClient, gameId: string) {
     if (!bot) return;
     // Thinking time: each bot has its own pace, and it varies from move to move
     const drawing = ctx.state.phase === "draw";
-    const ms = bot.speed * 1000 * (drawing ? 0.55 : 0.8) * (0.6 + Math.random() * 0.9);
-    await sleep(Math.min(ms, 6000));
+    // Never faster than the table animation (about 1.25 s per move), so every move can be followed
+    const ms = 1300 + bot.speed * 1000 * (drawing ? 0.5 : 0.8) * (0.5 + Math.random());
+    await sleep(Math.min(ms, 7000));
     ctx = await loadGameById(db, gameId); // the game may have ended meanwhile (someone gave up)
     if (ctx.row.finished_at || ctx.g.turn(ctx.state) !== seat) return;
     const a = ctx.g.botMove ? ctx.g.botMove(ctx.state, seat, bot.skill) : ctx.g.autoMove(ctx.state, seat);

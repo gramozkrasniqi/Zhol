@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import { findWin, type Action, type Card, type LogEntry, type PublicState } from "../../../supabase/functions/_shared/games/zhol";
 import type { BoardProps } from "../types";
 import { Back, CardView } from "./Card";
 import { AvatarFace } from "../../Avatar";
+import { smartGroups, sortRank, sortSuit } from "./sortHand";
+import { cardSound, setSound, soundOn } from "./sound";
 
 /** Where a seat sits around the oval. The player is always at the bottom; the radius lives in CSS. */
 function seatPosition(offset: number, total: number): CSSProperties {
@@ -12,10 +14,14 @@ function seatPosition(offset: number, total: number): CSSProperties {
 
 const botLevel = (skill?: number | null) => ((skill ?? 0.7) < 0.45 ? "Nybörjare" : (skill ?? 0.7) < 0.8 ? "Van" : "Expert");
 
-interface Flight { key: number; card?: Card; from: DOMRect; to: DOMRect }
+/** flip: which side shows at the start and end of the flight */
+interface Flight { key: number; card?: Card; from: DOMRect; to: DOMRect; face: [boolean, boolean]; endRot: number }
 interface Drag { kind: "card" | "stock" | "discard"; id?: number; x0: number; y0: number; x: number; y: number; moved: boolean; card?: Card }
-const FLIGHT_MS = 420;
-const STEP_MS = 520; // pause between animated moves, so bot turns can be followed
+const FLIGHT_MS = 950;
+const STEP_MS = 1250; // flight plus a short pause, so every move can be followed
+/** Each card rests on the discard pile at its own small angle, like a real pile. */
+export const pileTilt = (id: number) => ((id * 37) % 13) - 6;
+const pileShift = (id: number) => ((id * 53) % 9) - 4;
 const inside = (r: DOMRect | undefined, x: number, y: number, pad = 12) =>
   !!r && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 
@@ -34,8 +40,28 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const cardRefs = useRef(new Map<number, HTMLElement>());
   const suppressClick = useRef(false);
 
+  // Cards that are still on their way to the hand stay hidden until the flight lands
+  const [arriving, setArriving] = useState<Set<number>>(new Set());
+  const [landed, setLanded] = useState<number | null>(null);
+  const [breaks, setBreaks] = useState<Set<number>>(new Set());
+  const [sound, setSoundState] = useState(soundOn);
+  const knownIds = useRef<Set<number> | null>(null);
+  const myDrawLandedAt = useRef(0);
+  useEffect(() => {
+    const ids = new Set(hand.map((c) => c.id));
+    if (knownIds.current && Date.now() - myDrawLandedAt.current > 1500) {
+      const fresh = hand.filter((c) => !knownIds.current!.has(c.id)).map((c) => c.id);
+      if (fresh.length && fresh.length < 3) {
+        setArriving((a) => new Set([...a, ...fresh]));
+        window.setTimeout(() => setArriving((a) => { const n = new Set(a); fresh.forEach((id) => n.delete(id)); return n; }), 3500);
+      }
+    }
+    knownIds.current = ids;
+  }, [hand]);
+
   // Keep the player's own arrangement; new cards go to the end
   useEffect(() => {
+    rememberPositions();
     setOrder((o) => {
       const ids = new Set(hand.map((c) => c.id));
       const kept = o.filter((id) => ids.has(id));
@@ -50,7 +76,24 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const queue = useRef<LogEntry[]>([]);
   const playing = useRef(false);
   const lastCardRect = useRef<DOMRect | null>(null); // where my discarded card was, for my own throws
-
+  // What the table shows lags behind the server until each flight has landed
+  const [pile, setPile] = useState<Card[]>(pub.discardTop ? [pub.discardTop] : []);
+  const [stockShown, setStockShown] = useState(pub.stockCount);
+  const pubRef = useRef(pub);
+  pubRef.current = pub;
+  const handNow = useRef(hand);
+  handNow.current = hand;
+  const arrivingRef = useRef(arriving);
+  arrivingRef.current = arriving;
+  function syncTable() {
+    const p = pubRef.current;
+    setStockShown(p.stockCount);
+    setPile((cur) => {
+      const top = p.discardTop;
+      if (!top) return [];
+      return cur[cur.length - 1]?.id === top.id ? cur : [...cur.filter((c) => c.id !== top.id), top].slice(-4);
+    });
+  }
   useEffect(() => {
     const log = pub.log ?? [];
     const top = log.length ? log[log.length - 1].n : 0;
@@ -61,29 +104,96 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     queue.current.push(...fresh);
     if (!playing.current) playNext();
   }, [pub.log]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Declared after the log effect, so a move that is about to be animated is not shown early
+  useEffect(() => { if (!playing.current) syncTable(); }, [pub]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function rectOfSeat(seat: number) {
-    if (seat === mySeat) return handRef.current?.getBoundingClientRect();
+    if (seat === mySeat) {
+      const h = handRef.current?.getBoundingClientRect();
+      return h && new DOMRect(h.right - h.width * 0.2, h.top, h.width * 0.15, h.height);
+    }
     return seatRefs.current.get(seat)?.querySelector(".avatar")?.getBoundingClientRect();
   }
   function playNext() {
     const e = queue.current.shift();
-    if (!e) { playing.current = false; return; }
+    if (!e) { playing.current = false; syncTable(); return; }
     playing.current = true;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const stock = stockRef.current?.querySelector(".back, .card")?.getBoundingClientRect();
-    const disc = discardRef.current?.getBoundingClientRect();
+    const disc = discardRef.current?.querySelector(".card, .empty")?.getBoundingClientRect() ?? discardRef.current?.getBoundingClientRect();
     const seat = rectOfSeat(e.seat);
+    const mine = e.seat === mySeat;
     let from: DOMRect | undefined, to: DOMRect | undefined, card: Card | undefined;
-    if (e.kind === "draw") { from = e.from === "discard" ? disc : stock; to = seat; card = e.from === "discard" ? e.card : undefined; }
-    else { from = e.seat === mySeat && lastCardRect.current ? lastCardRect.current : seat; to = disc; card = e.card; }
-    if (e.seat === mySeat) lastCardRect.current = null;
-    if (from && to && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const key = Date.now() + Math.random();
-      setFlights((f) => [...f, { key, card, from: from!, to: to! }]);
-      window.setTimeout(() => setFlights((f) => f.filter((x) => x.key !== key)), FLIGHT_MS + 40);
+    let face: [boolean, boolean] = [true, true], endRot = 0;
+    let onLand = () => {};
+    if (e.kind === "draw") {
+      from = e.from === "discard" ? disc : stock;
+      if (e.from === "discard") {
+        card = e.card;
+        setPile((p) => p.slice(0, -1)); // the card lifts off the pile
+        face = [true, mine];
+      } else {
+        setStockShown((n) => Math.max(0, n - 1));
+        // My own card from the stock turns face up as it reaches the hand
+        const newId = mine ? [...arrivingRef.current][0] : undefined;
+        card = newId != null ? handNow.current.find((c) => c.id === newId) : undefined;
+        face = [false, !!card];
+      }
+      // Land on the card's own slot in my hand if it is already there
+      const slot = mine && card ? cardRefs.current.get(card.id)?.getBoundingClientRect() : undefined;
+      to = slot ?? seat;
+      if (mine && card) endRot = 0;
+      onLand = () => {
+        if (mine) {
+          myDrawLandedAt.current = Date.now();
+          const ids = [...arrivingRef.current];
+          setArriving(new Set());
+          if (ids[0] != null) { setLanded(ids[0]); window.setTimeout(() => setLanded(null), 500); }
+        }
+        cardSound("snap");
+      };
+      cardSound("swish");
+    } else {
+      from = mine && lastCardRect.current ? lastCardRect.current : seat;
+      to = disc;
+      card = e.card;
+      face = [mine, true];
+      endRot = card ? pileTilt(card.id) : 0;
+      onLand = () => {
+        if (card) setPile((p) => [...p.filter((c) => c.id !== card!.id), card!].slice(-4));
+        cardSound("snap");
+      };
     }
-    window.setTimeout(playNext, STEP_MS);
+    if (mine) lastCardRect.current = null;
+    if (from && to && !reduced) {
+      const key = Date.now() + Math.random();
+      setFlights((f) => [...f, { key, card, from: from!, to: to!, face, endRot }]);
+      window.setTimeout(() => { setFlights((f) => f.filter((x) => x.key !== key)); onLand(); }, FLIGHT_MS);
+      window.setTimeout(playNext, STEP_MS);
+    } else {
+      onLand();
+      window.setTimeout(playNext, reduced ? 250 : 0);
+    }
   }
+
+  /* ---------- Smooth reordering of the hand (FLIP) ---------- */
+  const before = useRef(new Map<number, DOMRect>());
+  function rememberPositions() {
+    before.current = new Map([...cardRefs.current].map(([id, el]) => [id, el.getBoundingClientRect()]));
+  }
+  useLayoutEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const [id, el] of cardRefs.current) {
+      const old = before.current.get(id);
+      if (!old) continue;
+      const now = el.getBoundingClientRect();
+      const dx = old.left - now.left, dy = old.top - now.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+        { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+    before.current = new Map();
+  }, [order, breaks]);
 
   /* ---------- Rules for what the player may do now ---------- */
   const over = ended || pub.phase === "over";
@@ -99,15 +209,23 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     act({ type: "discard", cardId: id });
     setSel(null);
   }
-  function sortBy(k: "s" | "r") {
-    const hi = (r: number) => (r === 1 ? 14 : r);
-    const key = (c: Card) => (c.j ? 999 : k === "s" ? c.s! * 20 + hi(c.r!) : hi(c.r!) * 4 + c.s!);
-    setOrder([...hand].sort((a, b) => key(a) - key(b)).map((c) => c.id));
+  function sortBy(k: "suit" | "rank" | "smart") {
+    rememberPositions();
+    if (k === "smart") {
+      const groups = smartGroups(hand, pub.variant === "small");
+      setOrder(groups.flat().map((c) => c.id));
+      setBreaks(new Set(groups.slice(1).map((g) => g[0].id)));
+      return;
+    }
+    setOrder((k === "suit" ? sortSuit(hand) : sortRank(hand)).map((c) => c.id));
+    setBreaks(new Set());
   }
   function moveTo(id: number, target: number) {
+    rememberPositions();
     const o = order.filter((x) => x !== id);
     o.splice(target, 0, id);
     setOrder(o);
+    setBreaks(new Set());
   }
   function shift(d: number) {
     const i = order.indexOf(sel!);
@@ -185,7 +303,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                 <button ref={stockRef} className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} aria-label={`Högen, ${pub.stockCount} kort`}
                   onClick={() => { if (!suppressClick.current) act({ type: "draw", from: "stock" }); }}
                   onPointerDown={(e) => drawOpen && startDrag(e, { kind: "stock" })}>
-                  <Back label={pub.stockCount} /><span className="lbl">Högen</span>
+                  <span className="stack" style={{ "--d": Math.min(5, Math.ceil(stockShown / 8)) } as CSSProperties}><Back label={stockShown} /></span><span className="lbl">Högen</span>
                 </button>
                 <button ref={discardRef} className={`pile ${drawOpen && pub.discardTop ? "go" : ""} ${dragOverDiscard ? "drop" : ""}`} aria-label="Kasthögen"
                   disabled={!(drawOpen && pub.discardTop) && !(myTurn && pub.phase === "discard")}
@@ -195,7 +313,14 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                     else if (sel != null && canThrow(sel)) throwCard(sel);
                   }}
                   onPointerDown={(e) => drawOpen && pub.discardTop && startDrag(e, { kind: "discard", card: pub.discardTop })}>
-                  {pub.discardTop ? <CardView c={pub.discardTop} /> : <span className="empty" />}<span className="lbl">Kastat</span>
+                  <span className="heap">
+                    {pile.length ? pile.map((c, i) => (
+                      <span key={c.id} className={`lay ${i === pile.length - 1 ? "top" : ""}`}
+                        style={{ transform: `translate(${pileShift(c.id)}px, ${pileShift(c.id * 7) / 2}px) rotate(${pileTilt(c.id)}deg)` }}>
+                        <CardView c={c} />
+                      </span>
+                    )) : <span className="empty" />}
+                  </span><span className="lbl">Kastat</span>
                 </button>
               </div>
             )}
@@ -233,7 +358,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
       <div ref={handRef} className={`hand ${dragOverHand ? "drop" : ""}`} style={{ "--n": sorted.length } as CSSProperties}>
         {sorted.map((c) => (
           <span key={c.id} ref={(el) => { if (el) cardRefs.current.set(c.id, el); else cardRefs.current.delete(c.id); }}
-            className={`slot ${drag?.moved && drag.id === c.id ? "lifted" : ""}`}
+            className={`slot ${drag?.moved && drag.id === c.id ? "lifted" : ""} ${arriving.has(c.id) ? "coming" : ""} ${landed === c.id ? "landed" : ""} ${breaks.has(c.id) ? "gap" : ""}`}
             onPointerDown={(e) => startDrag(e, { kind: "card", id: c.id, card: c })}>
             <CardView c={c} selected={sel === c.id} fresh={c.id === newest} onClick={() => tap(c)} />
           </span>
@@ -243,8 +368,13 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
       <div className="acts">
         <button disabled={sel == null} onClick={() => shift(-1)} aria-label="Flytta vänster">←</button>
         <button disabled={sel == null} onClick={() => shift(1)} aria-label="Flytta höger">→</button>
-        <button onClick={() => sortBy("s")}>Färg</button>
-        <button onClick={() => sortBy("r")}>Valör</button>
+        <span className="sorter" role="group" aria-label="Sortera handen">
+          <button onClick={() => sortBy("smart")} title="Lägger färdiga grupper och nästan färdiga grupper bredvid varandra">Grupper</button>
+          <button onClick={() => sortBy("rank")} title="Samma nummer bredvid varandra">Nummer</button>
+          <button onClick={() => sortBy("suit")} title="Samma färg i nummerordning">Färg</button>
+        </span>
+        <button className="snd" aria-pressed={sound} aria-label={sound ? "Stäng av ljud" : "Sätt på ljud"}
+          onClick={() => { setSound(!sound); setSoundState(!sound); }}>{sound ? "🔊" : "🔈"}</button>
         {pub.phase === "over" && !ended
           ? <button className="main" onClick={nextRound}>Ny runda</button>
           : <>
@@ -265,21 +395,45 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   );
 }
 
+const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+/** A card travelling in an arc: it lifts, turns over if needed, and settles at the angle it will rest at. */
 function FlyingCard({ f }: { f: Flight }) {
   const ref = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const el = ref.current, flip = inner.current;
+    if (!el || !flip) return;
     const fx = f.from.left + f.from.width / 2, fy = f.from.top + f.from.height / 2;
     const tx = f.to.left + f.to.width / 2, ty = f.to.top + f.to.height / 2;
-    el.animate(
-      [
-        { transform: `translate(${fx}px, ${fy}px) translate(-50%, -50%) scale(1) rotate(-8deg)`, opacity: 1 },
-        { transform: `translate(${(fx + tx) / 2}px, ${(fy + ty) / 2 - 30}px) translate(-50%, -50%) scale(1.08) rotate(4deg)`, opacity: 1, offset: 0.5 },
-        { transform: `translate(${tx}px, ${ty}px) translate(-50%, -50%) scale(.85) rotate(0deg)`, opacity: 0.2 },
-      ],
-      { duration: FLIGHT_MS, easing: "cubic-bezier(.3,.7,.3,1)", fill: "forwards" },
-    );
+    const dist = Math.hypot(tx - fx, ty - fy);
+    // Bend the path sideways and upwards, like a card thrown by hand
+    const cx = (fx + tx) / 2 - (ty - fy) * 0.18, cy = (fy + ty) / 2 - Math.min(120, 40 + dist * 0.25);
+    const spin = (tx > fx ? 1 : -1) * 14;
+    const frames: Keyframe[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = ease(i / 12), u = 1 - t;
+      const x = u * u * fx + 2 * u * t * cx + t * t * tx;
+      const y = u * u * fy + 2 * u * t * cy + t * t * ty;
+      const lift = Math.sin(Math.PI * t);
+      const rot = -spin * u + f.endRot * t + spin * 0.6 * lift;
+      frames.push({
+        transform: `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg) scale(${1 + 0.18 * lift})`,
+        filter: `drop-shadow(0 ${4 + 22 * lift}px ${6 + 18 * lift}px rgba(0,0,0,${0.55 - 0.2 * lift}))`,
+        offset: i / 12,
+      });
+    }
+    el.animate(frames, { duration: FLIGHT_MS, fill: "forwards" });
+    const side = (up: boolean) => `rotateY(${up ? 0 : 180}deg)`;
+    flip.animate([{ transform: side(f.face[0]), offset: 0 }, { transform: side(f.face[0]), offset: 0.25 }, { transform: side(f.face[1]), offset: 0.75 }, { transform: side(f.face[1]) }],
+      { duration: FLIGHT_MS, easing: "ease-in-out", fill: "forwards" });
   }, [f]);
-  return <div ref={ref} className="flying" aria-hidden="true">{f.card ? <CardView c={f.card} /> : <Back />}</div>;
+  return (
+    <div ref={ref} className="flying" aria-hidden="true">
+      <div ref={inner} className="f3">
+        <span className="side front">{f.card ? <CardView c={f.card} /> : <Back />}</span>
+        <span className="side rear"><Back /></span>
+      </div>
+    </div>
+  );
 }
