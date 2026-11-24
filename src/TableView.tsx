@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { BOARDS } from "./games";
@@ -127,25 +128,25 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
 
   if (!table) return null;
   const mod = GAMES[table.game];
-  const variant = mod?.variants.find((v) => v.id === table.variant)?.label ?? table.variant;
+  const variant = (mod?.variants.find((v) => v.id === table.variant)?.label ?? table.variant).split(" · ").map((x) => t(x)).join(" · ");
   const Board = BOARDS[table.game]?.Board;
 
   if (table.status === "waiting" || !game) {
     return (
       <section className="panel col center waiting-room">
-        <h2>{table.ranked ? "Rankad match" : "Privat bord"} i {mod?.name ?? table.game}</h2>
-        <p className="muted">{variant}{table.stake > 0 && `, insats ${chips(table.stake)} Lek, pott ${chips(table.stake * table.seats)} Lek`}</p>
+        <h2>{t("{kind} i {game}", { kind: table.ranked ? t("Rankad match") : t("Privat bord"), game: mod?.name ?? table.game })}</h2>
+        <p className="muted">{variant}{table.stake > 0 && t(", insats {s} Lek, pott {p} Lek", { s: chips(table.stake), p: chips(table.stake * table.seats) })}</p>
         {!table.ranked && <>
-          <p>Skicka koden till dina vänner:</p>
+          <p>{t("Skicka koden till dina vänner:")}</p>
           <button className="code" onClick={() => navigator.clipboard?.writeText(table.code).catch(() => {})}>{table.code}</button>
         </>}
-        <p>{seats.length} av {table.seats} spelare: {seats.map((s) => s.username).join(", ")}</p>
-        <p className="pulse">Väntar på spelare…</p>
-        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label="Helskärm">⛶</button>}
+        <p>{t("{n} av {m} spelare: {names}", { n: seats.length, m: table.seats, names: seats.map((s) => s.username).join(", ") })}</p>
+        <p className="pulse">{t("Väntar på spelare…")}</p>
+        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label={t("Helskärm")}>⛶</button>}
         <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         <div className="row">
-          <button className="primary" onClick={() => api("fill_bots", { tableId }).then(load).catch((e) => setErr(e.message))}>Fyll lediga platser med botar</button>
-          <button className="ghost" onClick={leave}>Lämna bordet</button>
+          <button className="primary" onClick={() => api("fill_bots", { tableId }).then(load).catch((e) => setErr(e.message))}>{t("Fyll lediga platser med botar")}</button>
+          <button className="ghost" onClick={leave}>{t("Lämna bordet")}</button>
         </div>
         {err && <p className="err">{err}</p>}
       </section>
@@ -153,7 +154,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
   }
 
   const mySeat = seats.find((s) => s.user_id === uid)?.seat ?? -1;
-  const nameOf = (seat: number) => (seat === mySeat ? "Du" : seats.find((s) => s.seat === seat)?.username ?? "…");
+  const nameOf = (seat: number) => (seat === mySeat ? t("Du") : seats.find((s) => s.seat === seat)?.username ?? "…");
   const running = !game.finished_at;
   const left = game.turn_deadline ? Math.max(0, Math.ceil((new Date(game.turn_deadline).getTime() - now) / 1000)) : null;
   const forfeit = game.outcome?.type === "forfeit" ? game.outcome : null;
@@ -161,33 +162,33 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
   return (
     <>
       <header className="bar">
-        <button className="ghost" onClick={leave}>← Lobby</button>
+        <button className="ghost" onClick={leave}>{t("← Lobby")}</button>
         <span className="tags">
           <span className="tag">{variant}</span>
-          <span className="tag">{table.ranked ? "Rankad" : `Bord ${table.code}`}</span>
-          <span className="tag">Runda {table.round}</span>
-          {table.stake > 0 && <span className="tag gold">Pott {chips(table.stake * table.seats)} Lek</span>}
+          <span className="tag">{table.ranked ? t("Rankad") : t("Bord {c}", { c: table.code })}</span>
+          <span className="tag">{t("Runda {n}", { n: table.round })}</span>
+          {table.stake > 0 && <span className="tag gold">{t("Pott {n} Lek", { n: chips(table.stake * (table.seats + buyIns(game.public))) })}</span>}
         </span>
-        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label="Helskärm">⛶</button>}
+        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label={t("Helskärm")}>⛶</button>}
         <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         {running && (confirmResign
-          ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
-          : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}
+          ? <span className="row"><button className="primary" onClick={resign}>{t("Ja, ge upp")}</button><button className="ghost" onClick={() => setConfirmResign(false)}>{t("Avbryt")}</button></span>
+          : <button className="ghost" onClick={() => setConfirmResign(true)}>{t("Ge upp")}</button>)}
       </header>
       {forfeit && (
         <div className="panel row banner">
           <span>
-            {forfeit.reason === "resign" ? `${nameOf(forfeit.seat)} gav upp.` : `${nameOf(forfeit.seat)} missade två turer i rad och förlorar.`}
-            {seats.length === 2 && ` ${nameOf(seats.find((s) => s.seat !== forfeit.seat)!.seat)} vinner.`}
+            {forfeit.reason === "resign" ? t("{name} gav upp.", { name: nameOf(forfeit.seat) }) : t("{name} missade två turer i rad och förlorar.", { name: nameOf(forfeit.seat) })}
+            {seats.length === 2 && ` ${t("{name} vinner.", { name: nameOf(seats.find((s) => s.seat !== forfeit.seat)!.seat) })}`}
           </span>
-          <button className="primary" onClick={nextRound}>Ny runda</button>
+          <button className="primary" onClick={nextRound}>{t("Ny runda")}</button>
         </div>
       )}
-      <p className="rotate-tip" aria-hidden="true">Vrid telefonen för ett större bord</p>
+      <p className="rotate-tip" aria-hidden="true">{t("Vrid telefonen för ett större bord")}</p>
       {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
           timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * (table.seats + buyIns(game.public)) : undefined} bubbles={bubbles}
           ranked={table.ranked} onLeave={leave} />
-        : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
+        : <p className="panel">{t("Den här appversionen kan inte visa spelet. Ladda om sidan.")}</p>}
       {err && <p className="err">{err}</p>}
     </>
   );

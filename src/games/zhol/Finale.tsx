@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { PublicState } from "../../../supabase/functions/_shared/games/zhol";
 import type { SeatInfo } from "../types";
@@ -33,7 +34,7 @@ export function Finale({ pub, mySeat, seats, pot, ranked, eloBefore, onNext, onL
 
   let k = 0; // running card index, so the cards are dealt one after another
   return (
-    <div className="finale" role="dialog" aria-label="Rundan är slut">
+    <div className="finale" role="dialog" aria-label={t("Rundan är slut")}>
       {confetti.map((c, i) => (
         <i key={i} className="confetti" style={{ left: c.left, background: c.color, animationDelay: c.delay, animationDuration: c.dur, rotate: c.rot }} />
       ))}
@@ -41,8 +42,8 @@ export function Finale({ pub, mySeat, seats, pot, ranked, eloBefore, onNext, onL
         <i key={i} className="paychip" style={{ ...toWinner, animationDelay: `${0.9 + i * 0.07}s` }} />
       )) : null}
       <div className="finale-card">
-        <h3>{winner < 0 ? "Oavgjort" : pub.points ? (iWon ? "Du är sist kvar – du vann!" : `${name(winner)} är sist kvar och vinner`) : iWon ? "Zhol! Du vann" : `${name(winner)} gjorde Zhol`}</h3>
-        {winner < 0 && <p className="muted">Högen tog slut innan någon fick ihop handen.</p>}
+        <h3>{winner < 0 ? t("Oavgjort") : pub.points ? (iWon ? t("Du är sist kvar – du vann!") : t("{name} är sist kvar och vinner", { name: name(winner) })) : iWon ? t("Zhol! Du vann") : t("{name} gjorde Zhol", { name: name(winner) })}</h3>
+        {winner < 0 && <p className="muted">{t("Högen tog slut innan någon fick ihop handen.")}</p>}
         {pub.winGroups && (!pub.points || pub.points.last?.closer === winner) && (
           <div className="win-groups">
             {pub.winGroups.map((g, gi) => (
@@ -53,12 +54,12 @@ export function Finale({ pub, mySeat, seats, pot, ranked, eloBefore, onNext, onL
           </div>
         )}
         <p className="gains">
-          {pot && winner >= 0 && <span className="gold">{iWon ? `+${pot.toLocaleString("sv-SE")} Lek` : `${name(winner)} tar ${pot.toLocaleString("sv-SE")} Lek`}</span>}
+          {pot && winner >= 0 && <span className="gold">{iWon ? `+${pot.toLocaleString("sv-SE")} Lek` : t("{name} tar {n} Lek", { name: name(winner), n: pot.toLocaleString("sv-SE") })}</span>}
           {delta != null && delta !== 0 && <span className={delta > 0 ? "up" : "down"}>{delta > 0 ? `+${delta}` : delta} Elo</span>}
         </p>
         <div className="row">
-          <button className="primary" onClick={onNext}>Ny runda</button>
-          {onLeave && <button className="ghost" onClick={onLeave}>Till lobbyn</button>}
+          <button className="primary" onClick={onNext}>{t("Ny runda")}</button>
+          {onLeave && <button className="ghost" onClick={onLeave}>{t("Till lobbyn")}</button>}
         </div>
       </div>
     </div>

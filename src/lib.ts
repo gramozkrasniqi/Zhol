@@ -1,3 +1,4 @@
+import { tServer } from "./i18n";
 import { createClient } from "@supabase/supabase-js";
 
 // The publishable key is meant to be public; access is enforced by RLS and the edge function.
@@ -24,9 +25,9 @@ export interface Table {
 export async function api<T = Record<string, unknown>>(op: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await sb.functions.invoke("game", { body: { op, ...args } });
   if (error) {
-    let msg = "Något gick fel";
+    let msg = "Något gick fel"; // translated below
     try { msg = (await (error as { context?: Response }).context?.json())?.error ?? msg; } catch { /* ignore */ }
-    throw new Error(msg);
+    throw new Error(tServer(msg));
   }
   return data as T;
 }

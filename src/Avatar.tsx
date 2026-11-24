@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { CSSProperties } from "react";
 
 /** Ready-made avatars in the app's palette: a symbol on a coloured disc. */
@@ -42,5 +43,5 @@ export async function squareWebp(file: File, size = 256): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   canvas.getContext("2d")!.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
-  return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error("Bilden kunde inte läsas"))), "image/webp", 0.85));
+  return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error(t("Bilden kunde inte läsas")))), "image/webp", 0.85));
 }

@@ -1,3 +1,4 @@
+import { t, tServer } from "../../i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyAction, botMove, findWin, makeDeck, publicView, shuffle,
@@ -32,7 +33,7 @@ export function lessonGame(): GameState {
 }
 
 const SEATS: SeatInfo[] = [
-  { user_id: "me", seat: 0, username: "Du", elo: 1200 },
+  { user_id: "me", seat: 0, username: t("Du"), elo: 1200 },
   { user_id: "bot", seat: 1, username: "Drita (bot)", elo: 1200, botSkill: 0.5 },
 ];
 
@@ -49,7 +50,7 @@ export function Tutorial({ onExit }: { onExit: () => void }) {
   function act(a: Action) {
     setErr("");
     try { setState(applyAction(stateRef.current, 0, a)); }
-    catch (e) { setErr((e as Error).message); }
+    catch (e) { setErr(tServer((e as Error).message)); }
   }
 
   // The bot plays one move at a time with a little thinking time
@@ -79,40 +80,40 @@ export function Tutorial({ onExit }: { onExit: () => void }) {
   // What the coach says depends on where the player is, not on a fixed script
   let step = "free", text: string;
   if (!started) { step = "intro"; text = ""; }
-  else if (state.phase === "over") { step = "over"; text = state.winner === 0 ? "Så går det till. Nu är du redo för riktiga bord." : "Drita hann före den här gången. Försök igen!"; }
-  else if (state.turn === 1) { step = "wait"; text = "Nu är det Dritas tur. Titta på vad hon kastar – det kan vara ett kort du behöver."; }
-  else if (canWin) { step = "zhol"; text = "Alla dina kort sitter nu i grupper. Tryck på Zhol! för att vinna."; }
+  else if (state.phase === "over") { step = "over"; text = t(state.winner === 0 ? "Så går det till. Nu är du redo för riktiga bord." : "Drita hann före den här gången. Försök igen!"); }
+  else if (state.turn === 1) { step = "wait"; text = t("Nu är det Dritas tur. Titta på vad hon kastar – det kan vara ett kort du behöver."); }
+  else if (canWin) { step = "zhol"; text = t("Alla dina kort sitter nu i grupper. Tryck på Zhol! för att vinna."); }
   else if (state.phase === "draw" && top?.r === 8 && top.s === 1 && hand.some((c) => c.r === 7 && c.s === 1)) {
-    step = "take"; text = "Drita kastade 8♥. Den passar efter din 5♥ 6♥ 7♥. Tryck på kasthögen för att ta den.";
-  } else if (state.phase === "draw" && state.moves === 0) { step = "draw"; text = "Din tur börjar alltid med att du tar ett kort. Tryck på högen."; }
-  else if (state.phase === "draw") { step = "free"; text = "Ta ett kort – från högen, eller från kasthögen om det öppna kortet passar dig."; }
+    step = "take"; text = t("Drita kastade 8♥. Den passar efter din 5♥ 6♥ 7♥. Tryck på kasthögen för att ta den.");
+  } else if (state.phase === "draw" && state.moves === 0) { step = "draw"; text = t("Din tur börjar alltid med att du tar ett kort. Tryck på högen."); }
+  else if (state.phase === "draw") { step = "free"; text = t("Ta ett kort – från högen, eller från kasthögen om det öppna kortet passar dig."); }
   else {
     const loose = hand.filter((c) => !c.j && !(c.r === 12) && !(c.s === 1 && c.r! >= 5 && c.r! <= 8));
     step = "discard";
     text = state.moves === 1
-      ? `Damerna blev en färdig grupp – se guldramen. Nu kastar du ett kort du inte behöver, till exempel ${loose.map(label).join(" eller ")}: dra det till kasthögen eller tryck två gånger på det.`
-      : "Kasta ett kort du inte behöver. Behåll korten med guldram.";
+      ? t("Damerna blev en färdig grupp – se guldramen. Nu kastar du ett kort du inte behöver, till exempel {cards}: dra det till kasthögen eller tryck två gånger på det.", { cards: loose.map(label).join(t(" eller ")) })
+      : t("Kasta ett kort du inte behöver. Behåll korten med guldram.");
   }
 
   return (
     <div className="tut" data-step={step}>
       <header className="bar">
-        <button className="ghost" onClick={onExit}>← Lobby</button>
-        <span className="tags"><span className="tag gold">Lär dig spela</span><span className="tag">Zhol i vogël, 7 kort</span></span>
-        <button className="ghost" onClick={() => { setState(lessonGame()); scripted.current = true; setErr(""); }}>Börja om</button>
+        <button className="ghost" onClick={onExit}>{t("← Lobby")}</button>
+        <span className="tags"><span className="tag gold">{t("Lär dig spela")}</span><span className="tag">{t("Zhol i vogël, 7 kort")}</span></span>
+        <button className="ghost" onClick={() => { setState(lessonGame()); scripted.current = true; setErr(""); }}>{t("Börja om")}</button>
       </header>
 
       {step === "intro" ? (
         <section className="panel coach-intro">
-          <h2>Zhol på två minuter</h2>
+          <h2>{t("Zhol på två minuter")}</h2>
           <ol className="steps">
-            <li><b>Målet:</b> få alla dina 7 kort i grupper.</li>
-            <li><b>Grupper:</b> tre eller fyra lika (Q♠ Q♦ Q♣) eller en serie i samma färg (5♥ 6♥ 7♥).</li>
-            <li><b>Varje tur:</b> ta ett kort, kasta ett kort.</li>
-            <li><b>Vinst:</b> när allt går ihop trycker du Zhol!</li>
+            <li dangerouslySetInnerHTML={{ __html: t("<b>Målet:</b> få alla dina 7 kort i grupper.") }} />
+            <li dangerouslySetInnerHTML={{ __html: t("<b>Grupper:</b> tre eller fyra lika (Q♠ Q♦ Q♣) eller en serie i samma färg (5♥ 6♥ 7♥).") }} />
+            <li dangerouslySetInnerHTML={{ __html: t("<b>Varje tur:</b> ta ett kort, kasta ett kort.") }} />
+            <li dangerouslySetInnerHTML={{ __html: t("<b>Vinst:</b> när allt går ihop trycker du Zhol!") }} />
           </ol>
-          <p className="muted">Du spelar en övningsrunda mot Drita. Inget räknas och inga Lek står på spel.</p>
-          <div className="row"><button className="primary big" onClick={() => setStarted(true)}>Börja</button></div>
+          <p className="muted">{t("Du spelar en övningsrunda mot Drita. Inget räknas och inga Lek står på spel.")}</p>
+          <div className="row"><button className="primary big" onClick={() => setStarted(true)}>{t("Börja")}</button></div>
         </section>
       ) : (
         <>

@@ -1,10 +1,11 @@
+import { t } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import type { SeatInfo } from "./games/types";
 import { sb } from "./lib";
 
 export interface ChatMessage { id: number; user_id: string; body: string; created_at: string }
-const QUICK = ["Lycka till!", "Bra spelat", "Oj!", "Snyggt!", "Så nära!", "Tack för spelet"];
+const QUICK = () => ["Lycka till!", "Bra spelat", "Oj!", "Snyggt!", "Så nära!", "Tack för spelet"].map((q) => t(q));
 
 /** Chat for everyone at the table. Messages arrive in realtime; the parent shows them as seat bubbles too. */
 export function TableChat({ tableId, uid, seats, onMessage }: {
@@ -41,7 +42,7 @@ export function TableChat({ tableId, uid, seats, onMessage }: {
     if (!b) return;
     setErr("");
     const { error } = await sb.from("table_messages").insert({ table_id: tableId, user_id: uid, body: b.slice(0, 300) });
-    if (error) setErr(error.message.includes("snabbt") ? "Du skriver för snabbt – vänta en stund." : "Meddelandet kunde inte skickas.");
+    if (error) setErr(error.message.includes("snabbt") ? t("Du skriver för snabbt – vänta en stund.") : t("Meddelandet kunde inte skickas."));
     else setText("");
   }
 
@@ -50,16 +51,16 @@ export function TableChat({ tableId, uid, seats, onMessage }: {
   return (
     <>
       <button className="ghost chat-toggle" onClick={() => { setOpen(!open); setUnread(0); }} aria-expanded={open} aria-controls="table-chat">
-        Chatt{unread > 0 && <span className="unread" aria-label={`${unread} olästa`}>{unread}</span>}
+        {t("Chatt")}{unread > 0 && <span className="unread" aria-label={t("{n} olästa", { n: unread })}>{unread}</span>}
       </button>
       {open && (
-        <aside id="table-chat" className="chat panel" aria-label="Chatt vid bordet">
+        <aside id="table-chat" className="chat panel" aria-label={t("Chatt vid bordet")}>
           <header className="chat-head">
-            <h2>Chatt vid bordet</h2>
-            <button className="ghost" onClick={() => setOpen(false)} aria-label="Stäng chatten">Stäng</button>
+            <h2>{t("Chatt vid bordet")}</h2>
+            <button className="ghost" onClick={() => setOpen(false)} aria-label={t("Stäng chatten")}>{t("Stäng")}</button>
           </header>
           <ol className="chat-list" ref={listRef}>
-            {msgs.length === 0 && <li className="muted">Inga meddelanden än. Säg hej till bordet.</li>}
+            {msgs.length === 0 && <li className="muted">{t("Inga meddelanden än. Säg hej till bordet.")}</li>}
             {msgs.map((m) => {
               const s = who(m.user_id);
               const mine = m.user_id === uid;
@@ -67,7 +68,7 @@ export function TableChat({ tableId, uid, seats, onMessage }: {
                 <li key={m.id} className={`msg ${mine ? "mine" : ""}`}>
                   {!mine && <Avatar who={{ username: s?.username ?? "?", avatar: s?.avatar }} size={28} />}
                   <div>
-                    {!mine && <span className="msg-name">{s?.username ?? "Har lämnat bordet"}</span>}
+                    {!mine && <span className="msg-name">{s?.username ?? t("Har lämnat bordet")}</span>}
                     <p>{m.body}</p>
                   </div>
                 </li>
@@ -75,11 +76,11 @@ export function TableChat({ tableId, uid, seats, onMessage }: {
             })}
           </ol>
           <div className="quick">
-            {QUICK.map((q) => <button key={q} onClick={() => send(q)}>{q}</button>)}
+            {QUICK().map((q) => <button key={q} onClick={() => send(q)}>{q}</button>)}
           </div>
           <form className="chat-form" onSubmit={(e) => { e.preventDefault(); send(text); }}>
-            <input aria-label="Skriv ett meddelande" value={text} maxLength={300} onChange={(e) => setText(e.target.value)} placeholder="Skriv till bordet…" />
-            <button className="primary" disabled={!text.trim()}>Skicka</button>
+            <input aria-label={t("Skriv ett meddelande")} value={text} maxLength={300} onChange={(e) => setText(e.target.value)} placeholder={t("Skriv till bordet…")} />
+            <button className="primary" disabled={!text.trim()}>{t("Skicka")}</button>
           </form>
           {err && <p className="err">{err}</p>}
         </aside>

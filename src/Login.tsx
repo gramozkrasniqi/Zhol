@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+import { LangSwitch } from "./LangSwitch";
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { CardView } from "./games/zhol/Card";
 import { sb } from "./lib";
@@ -32,7 +34,7 @@ export function Login() {
     setBusy(true); setErr("");
     const { error } = await sb.auth.signInAnonymously();
     setBusy(false);
-    if (error) setErr("Gästinloggning är inte påslagen. Logga in med e-post i stället.");
+    if (error) setErr(t("Gästinloggning är inte påslagen. Logga in med e-post i stället."));
   }
 
   return (
@@ -40,18 +42,19 @@ export function Login() {
       <div className="login-art">
         <Fan />
         <h1 className="wordmark big">Zhol</h1>
-        <p className="lead">Loja shqiptare me letra. Spela med vänner, mot folk på din nivå eller mot botar – när som helst.</p>
+        <p className="lead">{t("Loja shqiptare me letra. Spela med vänner, mot folk på din nivå eller mot botar – när som helst.")}</p>
+        <LangSwitch />
       </div>
       <div className="qilim" aria-hidden="true" />
       {sent ? (
-        <p className="panel login-box">Kolla din e-post. Inloggningslänken är skickad till <b>{email}</b>.</p>
+        <p className="panel login-box">{t("Kolla din e-post. Inloggningslänken är skickad till")} <b>{email}</b>.</p>
       ) : (
         <form className="panel login-box col" onSubmit={send}>
-          <button type="button" className="primary big" disabled={busy} onClick={guest}>Spela direkt som gäst</button>
-          <div className="or"><span>eller spara ditt konto</span></div>
-          <label htmlFor="em">E-post</label>
-          <input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@exempel.se" />
-          <button className="ghost" disabled={busy}>Skicka inloggningslänk</button>
+          <button type="button" className="primary big" disabled={busy} onClick={guest}>{t("Spela direkt som gäst")}</button>
+          <div className="or"><span>{t("eller spara ditt konto")}</span></div>
+          <label htmlFor="em">{t("E-post")}</label>
+          <input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("du@exempel.se")} />
+          <button className="ghost" disabled={busy}>{t("Skicka inloggningslänk")}</button>
           {err && <p className="err">{err}</p>}
         </form>
       )}

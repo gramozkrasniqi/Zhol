@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { Eagle } from "./Eagle";
 import { DRINKS, DrinkIcon, drinkOf } from "../../Drink";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
@@ -22,7 +23,7 @@ function drinkPosition(offset: number, total: number): CSSProperties {
   return { "--c": Math.cos(angle).toFixed(3), "--s": Math.sin(angle).toFixed(3) } as CSSProperties;
 }
 
-const botLevel = (skill?: number | null) => ((skill ?? 0.7) < 0.45 ? "Nybörjare" : (skill ?? 0.7) < 0.8 ? "Van" : "Expert");
+const botLevel = (skill?: number | null) => t((skill ?? 0.7) < 0.45 ? "Nybörjare" : (skill ?? 0.7) < 0.8 ? "Van" : "Expert");
 
 /** flip: which side shows at the start and end of the flight */
 interface Flight { key: number; card?: Card; from: DOMRect; to: DOMRect; face: [boolean, boolean]; endRot: number }
@@ -310,14 +311,14 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const dragOverDiscard = !!drag?.moved && drag.kind === "card" && canThrow(drag.id!) && inside(discardRef.current?.getBoundingClientRect(), drag.x, drag.y, 24);
   const dragOverHand = !!drag?.moved && drag.kind !== "card" && inside(handRef.current?.getBoundingClientRect(), drag.x, drag.y, 30);
 
-  const status = ended ? "Partiet är slut."
+  const status = ended ? t("Partiet är slut.")
     : pub.phase === "over"
-      ? pub.winner === -1 ? "Högen tog slut – oavgjort." : pub.winner === mySeat ? "Zhol! Du vann." : `${name(pub.winner!)} gjorde Zhol.`
-      : between ? `Runda ${P!.last?.round ?? P!.round} är klar.`
-      : P?.out[mySeat] ? `Du är ute – ${name(pub.turn)} spelar…`
+      ? pub.winner === -1 ? t("Högen tog slut – oavgjort.") : pub.winner === mySeat ? t("Zhol! Du vann.") : t("{name} gjorde Zhol.", { name: name(pub.winner!) })
+      : between ? t("Runda {n} är klar.", { n: P!.last?.round ?? P!.round })
+      : P?.out[mySeat] ? t("Du är ute – {name} spelar…", { name: name(pub.turn) })
       : myTurn
-        ? pub.phase === "draw" ? "Din tur – ta ett kort" : canWin ? "Du har Zhol!" : "Kasta ett kort"
-        : `${name(pub.turn)} spelar…`;
+        ? pub.phase === "draw" ? t("Din tur – ta ett kort") : canWin ? t("Du har Zhol!") : t("Kasta ett kort")
+        : t("{name} spelar…", { name: name(pub.turn) });
 
   const total = pub.seats;
   const ring = (seat: number): CSSProperties | undefined =>
@@ -333,12 +334,12 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
           <div className="center">
             {pub.phase === "over" && pub.winGroups ? null : (
               <div className="piles">
-                <button ref={stockRef} className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} aria-label={`Högen, ${pub.stockCount} kort`}
+                <button ref={stockRef} className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} aria-label={t("Högen, {n} kort", { n: pub.stockCount })}
                   onClick={() => { if (!suppressClick.current) act({ type: "draw", from: "stock" }); }}
                   onPointerDown={(e) => drawOpen && startDrag(e, { kind: "stock" })}>
-                  <span className="stack" style={{ "--d": Math.min(5, Math.ceil(stockShown / 8)) } as CSSProperties}><Back label={stockShown} /></span><span className="lbl">Högen</span>
+                  <span className="stack" style={{ "--d": Math.min(5, Math.ceil(stockShown / 8)) } as CSSProperties}><Back label={stockShown} /></span><span className="lbl">{t("Högen")}</span>
                 </button>
-                <button ref={discardRef} className={`pile ${drawOpen && pub.discardTop ? "go" : ""} ${dragOverDiscard ? "drop" : ""}`} aria-label="Kasthögen"
+                <button ref={discardRef} className={`pile ${drawOpen && pub.discardTop ? "go" : ""} ${dragOverDiscard ? "drop" : ""}`} aria-label={t("Kasthögen")}
                   disabled={!(drawOpen && pub.discardTop) && !(myTurn && pub.phase === "discard")}
                   onClick={() => {
                     if (suppressClick.current) return;
@@ -353,14 +354,14 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                         <CardView c={c} />
                       </span>
                     )) : <span className="empty" />}
-                  </span><span className="lbl">Kastat</span>
+                  </span><span className="lbl">{t("Kastat")}</span>
                 </button>
               </div>
             )}
             {canWin && !busy
               ? <button className="zhol-call" onClick={() => act({ type: "zhol" })}>Zhol!</button>
               : <div className={`status ${myTurn ? "mine" : ""}`} aria-live="polite">{status}</div>}
-            {P && <div className="round-tag">Runda {P.round} · till 101</div>}
+            {P && <div className="round-tag">{t("Runda {n} · till 101", { n: P.round })}</div>}
             {pot ? <div className="pot"><i aria-hidden="true" />{pot.toLocaleString("sv-SE")} Lek</div> : null}
           </div>
         </div></div>
@@ -381,12 +382,12 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                 {bubbles[s.seat] && <span className={`bubble ${Math.sin(Math.PI / 2 + (offset * 2 * Math.PI) / total) < -0.2 ? "down" : ""}`} role="status">{bubbles[s.seat]}</span>}
               </div>
               <div className="plate">
-                <span className="nm">{offset === 0 ? "Du" : label}{isBot && <em>bot</em>}</span>
+                <span className="nm">{offset === 0 ? t("Du") : label}{isBot && <em>{t("bot")}</em>}</span>
                 <span className="meta">{P
-                  ? <><b className="score">{P.scores[s.seat]} p</b>{out ? ", ute" : `, ${pub.handCounts[s.seat] ?? 0} kort`}</>
+                  ? <><b className="score">{P.scores[s.seat]} p</b>{out ? `, ${t("ute")}` : `, ${t("{n} kort", { n: pub.handCounts[s.seat] ?? 0 })}`}</>
                   : <>{isBot
                     ? <>{botLevel(s.botSkill)}, </>
-                    : <span className="elo">{s.elo} Elo, </span>}{pub.handCounts[s.seat] ?? 0} kort</>}</span>
+                    : <span className="elo">{s.elo} Elo, </span>}{t("{n} kort", { n: pub.handCounts[s.seat] ?? 0 })}</>}</span>
               </div>
               {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
             </div>
@@ -397,7 +398,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
           const kind = drinkOf(s.drink, s.user_id);
           return (
             <div key={`d${s.seat}`} className={`drink ${kind} ${offset === 0 ? "me" : ""}`} style={drinkPosition(offset, total)}
-              title={offset === 0 ? DRINKS.find((d) => d.id === kind)!.label : undefined}>
+              title={offset === 0 ? t(DRINKS.find((d) => d.id === kind)!.label) : undefined}>
               <DrinkIcon kind={kind} steam={!over && pub.turn === s.seat} />
             </div>
           );
@@ -405,7 +406,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
         {between && (
           <RoundBoard pub={pub} mySeat={mySeat} seats={seats} timeLeft={timeLeft} busy={busy}
             onNext={() => act({ type: "next" })} onRebuy={() => act({ type: "rebuy" })}
-            stakeNote={pot ? "kostar insatsen igen" : undefined} />
+            stakeNote={pot ? t("kostar insatsen igen") : undefined} />
         )}
         {pub.phase === "over" && !ended && (
           <Finale pub={pub} mySeat={mySeat} seats={seats} eloBefore={eloBefore.current.get(mySeat)} pot={pot} ranked={!!ranked} onNext={nextRound} onLeave={onLeave} />
@@ -424,17 +425,17 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
       <div className="handbar">
         <span className={`progress ${over || between ? "off" : ""}`} aria-live="polite">
           <span className="meter" style={{ "--v": inGroups / needed } as CSSProperties}><i /></span>
-          {over || between ? "" : inGroups === 0 ? "Inga färdiga grupper än" : `${inGroups} av ${needed} kort i färdiga grupper`}
+          {over || between ? "" : inGroups === 0 ? t("Inga färdiga grupper än") : t("{a} av {b} kort i färdiga grupper", { a: inGroups, b: needed })}
         </span>
         <span className="tools">
-          <button onClick={cycleSort} aria-label={`Sortera handen, nu: ${sortIdx < 0 ? "egen ordning" : SORTS[sortIdx].label}`}>
-            Sortera{sortIdx >= 0 && <em>{SORTS[sortIdx].label}</em>}
+          <button onClick={cycleSort} aria-label={t("Sortera handen, nu: {k}", { k: sortIdx < 0 ? t("egen ordning") : t(SORTS[sortIdx].label) })}>
+            {t("Sortera")}{sortIdx >= 0 && <em>{t(SORTS[sortIdx].label)}</em>}
           </button>
-          <button className="snd" aria-pressed={sound} aria-label={sound ? "Stäng av ljud" : "Sätt på ljud"}
+          <button className="snd" aria-pressed={sound} aria-label={sound ? t("Stäng av ljud") : t("Sätt på ljud")}
             onClick={() => { setSound(!sound); setSoundState(!sound); }}>{sound ? "🔊" : "🔈"}</button>
         </span>
       </div>
-      <p className="hint">{myTurn ? (pub.phase === "draw" ? "Ta ett kort från högen eller kasthögen." : canWin ? "Handen går ihop – tryck på Zhol!" : "Dra ett kort till kasthögen, eller tryck två gånger på det.") : "Dra korten i handen för att ordna dem."}</p>
+      <p className="hint">{t(myTurn ? (pub.phase === "draw" ? "Ta ett kort från högen eller kasthögen." : canWin ? "Handen går ihop – tryck på Zhol!" : "Dra ett kort till kasthögen, eller tryck två gånger på det.") : "Dra korten i handen för att ordna dem.")}</p>
 
       {/* Card that follows the finger while dragging */}
       {drag?.moved && (

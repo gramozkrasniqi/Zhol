@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+import { LangSwitch } from "./LangSwitch";
 import { DRINKS, DrinkIcon } from "./Drink";
 import { tutorialDone } from "./games/zhol/Tutorial";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
@@ -109,7 +111,7 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
   async function setAvatar(value: string) {
     const r = await run(async () => {
       const { error } = await sb.from("profiles").update({ avatar: value }).eq("id", uid);
-      if (error) throw new Error("Avataren kunde inte sparas");
+      if (error) throw new Error(t("Avataren kunde inte sparas"));
       return true;
     });
     if (r) load();
@@ -118,7 +120,7 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
   async function setDrink(value: "kafe" | "caj") {
     const r = await run(async () => {
       const { error } = await sb.from("profiles").update({ drink: value }).eq("id", uid);
-      if (error) throw new Error("Drycken kunde inte sparas");
+      if (error) throw new Error(t("Drycken kunde inte sparas"));
       return true;
     });
     if (r) load();
@@ -131,7 +133,7 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
       const blob = await squareWebp(file);
       const path = `${uid}/avatar.webp`;
       const { error } = await sb.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/webp" });
-      if (error) throw new Error("Bilden kunde inte laddas upp");
+      if (error) throw new Error(t("Bilden kunde inte laddas upp"));
       const url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
       await setAvatar(`${url}?v=${Date.now()}`);
     });
@@ -149,17 +151,17 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
       <header className="topbar">
         <span className="wordmark">Zhol</span>
         <div className="topbar-right">
-          <span className="chip-pill" title="Dina Lek"><i className="chip-ico" aria-hidden="true" />{chips(balance)} Lek</span>
+          <span className="chip-pill" title={t("Dina Lek")}><i className="chip-ico" aria-hidden="true" />{chips(balance)} Lek</span>
           <details className="profile">
-            <summary aria-label="Profil och avatar">
+            <summary aria-label={t("Profil och avatar")}>
               <Avatar who={{ username: me?.username ?? "?", avatar: me?.avatar }} size={42} />
             </summary>
             <div className="profile-menu panel col">
               <div className="col">
-                <span className="menu-label">Din avatar</span>
-                <div className="avatar-grid" role="radiogroup" aria-label="Välj avatar">
+                <span className="menu-label">{t("Din avatar")}</span>
+                <div className="avatar-grid" role="radiogroup" aria-label={t("Välj avatar")}>
                   {PRESETS.map((p) => (
-                    <button key={p.id} role="radio" aria-checked={me?.avatar === `preset:${p.id}`} aria-label={p.label}
+                    <button key={p.id} role="radio" aria-checked={me?.avatar === `preset:${p.id}`} aria-label={t(p.label)}
                       className={`avatar-opt ${me?.avatar === `preset:${p.id}` ? "on" : ""}`} onClick={() => setAvatar(`preset:${p.id}`)}>
                       <Avatar who={{ username: "", avatar: `preset:${p.id}` }} size={40} />
                     </button>
@@ -167,26 +169,27 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
                 </div>
                 <label className="upload ghost">
                   <input type="file" accept="image/*" onChange={(e) => upload(e.target.files?.[0])} disabled={uploading} />
-                  {uploading ? "Laddar upp…" : "Ladda upp egen bild"}
+                  {uploading ? t("Laddar upp…") : t("Ladda upp egen bild")}
                 </label>
               </div>
               <div className="col">
-                <span className="menu-label">Din dryck vid bordet</span>
-                <div className="drink-pick" role="radiogroup" aria-label="Välj dryck">
+                <span className="menu-label">{t("Din dryck vid bordet")}</span>
+                <div className="drink-pick" role="radiogroup" aria-label={t("Välj dryck")}>
                   {DRINKS.map((d) => (
                     <button key={d.id} role="radio" aria-checked={(me?.drink ?? "kafe") === d.id}
                       className={(me?.drink ?? "kafe") === d.id ? "on" : ""} onClick={() => setDrink(d.id)}>
-                      <DrinkIcon kind={d.id} size={40} /><span>{d.label}</span>
+                      <DrinkIcon kind={d.id} size={40} /><span>{t(d.label)}</span>
                     </button>
                   ))}
                 </div>
               </div>
               <form className="col" onSubmit={(e) => { e.preventDefault(); run(() => api("set_username", { username: name })).then(load); }}>
-                <label htmlFor="un">Ditt namn vid bordet</label>
+                <label htmlFor="un">{t("Ditt namn vid bordet")}</label>
                 <input id="un" value={name} onChange={(e) => setName(e.target.value)} />
-                <button className="primary" disabled={!me || name === me.username}>Spara namn</button>
+                <button className="primary" disabled={!me || name === me.username}>{t("Spara namn")}</button>
               </form>
-              <button className="ghost" onClick={() => sb.auth.signOut()}>Logga ut</button>
+              <LangSwitch />
+              <button className="ghost" onClick={() => sb.auth.signOut()}>{t("Logga ut")}</button>
             </div>
           </details>
         </div>
@@ -194,31 +197,31 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
 
       <section className="hero">
         <div className="hero-text">
-          <h1>Sätt dig vid bordet.</h1>
+          <h1>{t("Sätt dig vid bordet.")}</h1>
           <div className="standing">
-            <span className="badge league" data-league={leagueOf(elo)}>{leagueOf(elo)}</span>
+            <span className="badge league" data-league={leagueOf(elo)}>{t(leagueOf(elo))}</span>
             <span><b>{elo}</b> Elo</span>
-            <span><b>{rating?.wins ?? 0}</b> vinster av {rating?.games ?? 0}</span>
+            <span><b>{rating?.wins ?? 0}</b> {t("vinster av {n}", { n: rating?.games ?? 0 })}</span>
           </div>
           {searching ? (
             <div className="searching">
               <span className="radar" aria-hidden="true" />
-              <p>Söker {seats - 1 === 1 ? "en motståndare" : `${seats - 1} motståndare`} nära {elo} Elo. Botar tar platserna om {Math.max(0, BOT_FILL_AFTER - waited)} sekunder.</p>
+              <p>{t("Söker {who} nära {elo} Elo. Botar tar platserna om {s} sekunder.", { who: seats - 1 === 1 ? t("en motståndare") : t("{n} motståndare", { n: seats - 1 }), elo, s: Math.max(0, BOT_FILL_AFTER - waited) })}</p>
               <div className="row">
-                <button className="primary" onClick={botsNow}>Spela mot botar nu</button>
-                <button className="ghost" onClick={cancel}>Avbryt</button>
+                <button className="primary" onClick={botsNow}>{t("Spela mot botar nu")}</button>
+                <button className="ghost" onClick={cancel}>{t("Avbryt")}</button>
               </div>
             </div>
           ) : (
             <div className="cta">
-              <button className="primary big" onClick={quick}>Snabbmatch</button>
-              <button className="ghost big" onClick={botsNow}>Mot botar</button>
+              <button className="primary big" onClick={quick}>{t("Snabbmatch")}</button>
+              <button className="ghost big" onClick={botsNow}>{t("Mot botar")}</button>
             </div>
           )}
-          <p className="fine">Snabbmatch är rankad och ger Elo. Mot botar är gratis och orankat.</p>
+          <p className="fine">{t("Snabbmatch är rankad och ger Elo. Mot botar är gratis och orankat.")}</p>
           {newbie
-            ? <button className="learn" onClick={onTutorial}><b>Ny på Zhol?</b> Lär dig spela på två minuter</button>
-            : <p className="fine links"><button className="link" onClick={onRules}>Regler</button><button className="link" onClick={onTutorial}>Öva en runda</button></p>}
+            ? <button className="learn" onClick={onTutorial}><b>{t("Ny på Zhol?")}</b> {t("Lär dig spela på två minuter")}</button>
+            : <p className="fine links"><button className="link" onClick={onRules}>{t("Regler")}</button><button className="link" onClick={onTutorial}>{t("Öva en runda")}</button></p>}
         </div>
         <Fan />
       </section>
@@ -226,28 +229,28 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
 
       {dailyReady && (
         <button className="daily" onClick={() => run(() => api("claim_daily")).then(load)}>
-          <i className="chip-ico" aria-hidden="true" /> Hämta dagens {chips(DAILY_CHIPS)} gratis Lek
+          <i className="chip-ico" aria-hidden="true" /> {t("Hämta dagens {n} gratis Lek", { n: chips(DAILY_CHIPS) })}
         </button>
       )}
       {err && <p className="err">{err}</p>}
 
       <section className="setup panel">
-        <h2>Ditt bord</h2>
+        <h2>{t("Ditt bord")}</h2>
         {ids.length > 1 && (
-          <div className="seg" role="radiogroup" aria-label="Spel">
+          <div className="seg" role="radiogroup" aria-label={t("Spel")}>
             {ids.map((id) => <button key={id} role="radio" aria-checked={game === id} className={game === id ? "on" : ""} onClick={() => pickGame(id)}>{GAMES[id].name}</button>)}
           </div>
         )}
         <div className="setup-grid">
           <fieldset>
-            <legend>Variant</legend>
-            <div className="variants" role="radiogroup" aria-label="Variant">
+            <legend>{t("Variant")}</legend>
+            <div className="variants" role="radiogroup" aria-label={t("Variant")}>
               {mod.variants.filter((v) => !v.id.endsWith("-p")).map((v) => {
                 const [title, sub] = v.label.split(" · ");
                 const on = variant.replace(/-p$/, "") === v.id;
                 return (
                   <button key={v.id} role="radio" aria-checked={on} className={`variant ${on ? "on" : ""}`} onClick={() => setVariant(v.id + (pointsMode ? "-p" : ""))}>
-                    <b>{title}</b><span>{sub}</span>
+                    <b>{t(title)}</b><span>{t(sub)}</span>
                   </button>
                 );
               })}
@@ -255,20 +258,20 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
           </fieldset>
           {hasPoints && (
             <fieldset>
-              <legend>Spelsätt</legend>
-              <div className="variants modes" role="radiogroup" aria-label="Spelsätt">
+              <legend>{t("Spelsätt")}</legend>
+              <div className="variants modes" role="radiogroup" aria-label={t("Spelsätt")}>
                 <button role="radio" aria-checked={!pointsMode} className={`variant ${!pointsMode ? "on" : ""}`} onClick={() => setVariant(variant.replace(/-p$/, ""))}>
-                  <b>Snabb</b><span>En runda, den som gör Zhol vinner</span>
+                  <b>{t("Snabb")}</b><span>{t("En runda, den som gör Zhol vinner")}</span>
                 </button>
                 <button role="radio" aria-checked={pointsMode} className={`variant ${pointsMode ? "on" : ""}`} onClick={() => setVariant(variant.replace(/-p$/, "") + "-p")}>
-                  <b>Till 101</b><span>Poäng för lösa kort, sista kvar tar potten</span>
+                  <b>{t("Till 101")}</b><span>{t("Poäng för lösa kort, sista kvar tar potten")}</span>
                 </button>
               </div>
             </fieldset>
           )}
           <fieldset>
-            <legend>Spelare</legend>
-            <div className="seats-pick" role="radiogroup" aria-label="Antal spelare">
+            <legend>{t("Spelare")}</legend>
+            <div className="seats-pick" role="radiogroup" aria-label={t("Antal spelare")}>
               {mod.seatOptions.map((n) => (
                 <button key={n} role="radio" aria-checked={seats === n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>
                   <span className="dots" aria-hidden="true">{Array.from({ length: n }, (_, i) => <i key={i} style={{ "--a": `${(i * 360) / n}deg` } as CSSProperties} />)}</span>
@@ -278,37 +281,37 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
             </div>
           </fieldset>
           <fieldset>
-            <legend>Insats per spelare</legend>
-            <div className="chips" role="radiogroup" aria-label="Insats per spelare">
+            <legend>{t("Insats per spelare")}</legend>
+            <div className="chips" role="radiogroup" aria-label={t("Insats per spelare")}>
               {STAKES.map((n) => (
                 <button key={n} role="radio" aria-checked={stake === n} className={`pchip v${n} ${stake === n ? "on" : ""}`} disabled={n > balance} onClick={() => setStake(n)}
-                  aria-label={n === 0 ? "Gratis" : `${chips(n)} Lek`}>
+                  aria-label={n === 0 ? t("Gratis") : `${chips(n)} Lek`}>
                   <span>{n === 0 ? "0" : n >= 1000 ? `${n / 1000}k` : n}</span>
                 </button>
               ))}
             </div>
-            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} Lek. ${pointsMode ? "Sista kvar tar allt. Den som köper in sig igen betalar insatsen en gång till." : "Vinnaren tar allt."}`}</p>
+            <p className="fine">{stake === 0 ? t("Gratis bord.") : `${t("Pott {n} Lek.", { n: chips(stake * seats) })} ${pointsMode ? t("Sista kvar tar allt. Den som köper in sig igen betalar insatsen en gång till.") : t("Vinnaren tar allt.")}`}</p>
           </fieldset>
         </div>
       </section>
 
       <section className="duo">
         <div className="panel col friends">
-          <h2>Spela med vänner</h2>
-          <p className="muted">Skapa ett privat bord för {seats} och dela koden. Tomma platser kan fyllas med botar.</p>
+          <h2>{t("Spela med vänner")}</h2>
+          <p className="muted">{t("Skapa ett privat bord för {n} och dela koden. Tomma platser kan fyllas med botar.", { n: seats })}</p>
           <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats, stake })).then((r) => r && onOpen(r.table.id))}>
-            Skapa privat bord
+            {t("Skapa privat bord")}
           </button>
         </div>
         <form className="panel col" onSubmit={(e) => { e.preventDefault(); run(() => api<{ table: Table }>("join_table", { code })).then((r) => r && onOpen(r.table.id)); }}>
-          <h2>Har du fått en kod?</h2>
-          <input className="code-input" aria-label="Bordskod" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="K7P2QX" maxLength={6} />
-          <button className="primary" disabled={code.length !== 6}>Gå med i bordet</button>
+          <h2>{t("Har du fått en kod?")}</h2>
+          <input className="code-input" aria-label={t("Bordskod")} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="K7P2QX" maxLength={6} />
+          <button className="primary" disabled={code.length !== 6}>{t("Gå med i bordet")}</button>
         </form>
       </section>
 
       <section className="panel leaders">
-        <h2>Bästa spelarna i {mod.name}</h2>
+        <h2>{t("Bästa spelarna i {g}", { g: mod.name })}</h2>
         {top.length ? (
           <>
             <ol className="podium">
@@ -323,16 +326,16 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
             </ol>
             {rest.length > 0 && (
               <table className="board">
-                <thead><tr><th>Plats</th><th>Spelare</th><th>Liga</th><th className="num">Elo</th></tr></thead>
+                <thead><tr><th>{t("Plats")}</th><th>{t("Spelare")}</th><th>{t("Liga")}</th><th className="num">Elo</th></tr></thead>
                 <tbody>{rest.map((p, i) => (
-                  <tr key={p.user_id} className={p.user_id === uid ? "mine" : ""}><td>{i + 4}</td><td>{p.profiles.username}</td><td>{leagueOf(p.elo)}</td><td className="num">{p.elo}</td></tr>
+                  <tr key={p.user_id} className={p.user_id === uid ? "mine" : ""}><td>{i + 4}</td><td>{p.profiles.username}</td><td>{t(leagueOf(p.elo))}</td><td className="num">{p.elo}</td></tr>
                 ))}</tbody>
               </table>
             )}
           </>
-        ) : <p className="muted">Ingen har spelat en rankad match än. Vinn en snabbmatch så hamnar du först här.</p>}
+        ) : <p className="muted">{t("Ingen har spelat en rankad match än. Vinn en snabbmatch så hamnar du först här.")}</p>}
       </section>
-      <p className="fine center">Lek i Zhol är spelpengar, inte riktiga albanska lek. De har inget värde och kan inte växlas in eller föras över.</p>
+      <p className="fine center">{t("Lek i Zhol är spelpengar, inte riktiga albanska lek. De har inget värde och kan inte växlas in eller föras över.")}</p>
     </div>
   );
 }
