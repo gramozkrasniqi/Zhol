@@ -62,3 +62,5 @@ button[disabled]{opacity:.4;cursor:default}
 .timer.low b,.timer.low .bar-track span{color:var(--red);background-color:var(--red)}
 .timer.low b{background:none}
 .banner{justify-content:space-between;font-weight:600}
+.daily{min-height:52px}
+.center{text-align:center}

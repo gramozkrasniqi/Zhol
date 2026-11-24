@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { leagueOf } from "../supabase/functions/_shared/rating";
-import { api, sb, START_ELO, type Profile, type Rating, type Table } from "./lib";
+import { api, chips, DAILY_CHIPS, sb, STAKES, START_ELO, swedishToday, type Profile, type Rating, type Table, type Wallet } from "./lib";
 
 type Row = Rating & { profiles: { username: string } };
 
@@ -13,6 +13,8 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const [seats, setSeats] = useState(mod.seatOptions[0]);
   const [me, setMe] = useState<Profile | null>(null);
   const [rating, setRating] = useState<Rating | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [stake, setStake] = useState(0);
   const [top, setTop] = useState<Row[]>([]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -21,11 +23,13 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const poll = useRef<number>();
 
   const load = useCallback(async () => {
-    const [{ data: p }, { data: r }, { data: t }] = await Promise.all([
+    const [{ data: p }, { data: r }, { data: t }, { data: w }] = await Promise.all([
       sb.from("profiles").select().eq("id", uid).single(),
       sb.from("ratings").select().eq("user_id", uid).eq("game", game).maybeSingle(),
       sb.from("ratings").select("*, profiles(username)").eq("game", game).order("elo", { ascending: false }).limit(20),
+      sb.from("wallets").select().eq("user_id", uid).maybeSingle(),
     ]);
+    setWallet(w);
     if (p) { setMe(p); setName(p.username); }
     setRating(r);
     setTop((t ?? []) as Row[]);
@@ -45,7 +49,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   }
 
   async function quick() {
-    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant }));
+    const r = await run(() => api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake }));
     if (!r) return;
     if (!r.waiting) return onOpen(r.table.id);
     // We opened a table: wait for someone to sit down, and keep looking for others meanwhile
@@ -56,7 +60,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
       const { data } = await sb.from("tables").select("status").eq("id", myTable).maybeSingle();
       if (data?.status === "playing") { window.clearInterval(poll.current); return onOpen(myTable); }
       try {
-        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant });
+        const again = await api<{ table: Table; waiting?: boolean }>("quick_match", { game, variant, stake });
         if (!again.waiting) { window.clearInterval(poll.current); onOpen(again.table.id); }
       } catch { /* keep waiting */ }
     }, 4000);
@@ -70,6 +74,9 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   }
 
   const elo = rating?.elo ?? START_ELO;
+  const balance = wallet?.balance ?? 0;
+  const dailyReady = wallet !== null && wallet.last_daily !== swedishToday();
+  const stakeLabel = (n: number) => (n === 0 ? "Gratis" : `${chips(n)} marker`);
   return (
     <>
       <header className="bar">
@@ -88,7 +95,13 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
           </div>
           <div className="stat"><b>{elo}</b><span>{leagueOf(elo)} i {mod.name}</span></div>
           <div className="stat"><b>{rating?.wins ?? 0}/{rating?.games ?? 0}</b><span>vinster</span></div>
+          <div className="stat"><b>{chips(balance)}</b><span>marker</span></div>
         </section>
+      )}
+      {dailyReady && (
+        <button className="primary daily" onClick={() => run(() => api("claim_daily")).then(load)}>
+          Hämta dagens {chips(DAILY_CHIPS)} gratis marker
+        </button>
       )}
 
       <section className="panel col">
@@ -103,6 +116,14 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
             <button key={v.id} role="radio" aria-checked={variant === v.id} className={variant === v.id ? "on" : ""} onClick={() => setVariant(v.id)}>{v.label}</button>
           ))}
         </div>
+        <div className="seg" role="radiogroup" aria-label="Insats per spelare">
+          {STAKES.map((n) => (
+            <button key={n} role="radio" aria-checked={stake === n} className={stake === n ? "on" : ""} disabled={n > balance} onClick={() => setStake(n)}>
+              {stakeLabel(n)}
+            </button>
+          ))}
+        </div>
+        {stake > 0 && <p className="muted">Insats {chips(stake)} per spelare – vinnaren tar hela potten.</p>}
         {searching ? (
           <div className="row"><span className="pulse">Söker motståndare nära {elo}…</span><button className="ghost" onClick={cancel}>Avbryt</button></div>
         ) : (
@@ -116,7 +137,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
           <div className="seg">
             {mod.seatOptions.map((n) => <button key={n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>)}
           </div>
-          <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats })).then((r) => r && onOpen(r.table.id))}>
+          <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats, stake })).then((r) => r && onOpen(r.table.id))}>
             Skapa privat bord
           </button>
         </div>
@@ -139,6 +160,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
           </table>
         ) : <p className="muted">Ingen har spelat än. Bli först på listan.</p>}
       </section>
+      <p className="muted center">Markerna är låtsaspengar. De har inget värde och kan inte växlas in eller föras över.</p>
     </>
   );
 }

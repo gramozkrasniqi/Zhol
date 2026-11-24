@@ -9,8 +9,14 @@ export const sb = createClient(url || "http://localhost", key || "missing");
 export interface Profile { id: string; username: string }
 export interface Rating { user_id: string; game: string; elo: number; games: number; wins: number }
 export const START_ELO = 1200;
+export const STAKES = [0, 100, 500, 1000];
+export const DAILY_CHIPS = 500;
+export interface Wallet { user_id: string; balance: number; last_daily: string | null }
+/** Today's date in Sweden as YYYY-MM-DD, the same day boundary the server uses for daily chips. */
+export const swedishToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
+export const chips = (n: number) => n.toLocaleString("sv-SE");
 export interface Table {
-  id: string; code: string; game: string; variant: string; seats: number; ranked: boolean;
+  id: string; code: string; game: string; variant: string; seats: number; ranked: boolean; stake: number;
   status: "waiting" | "playing" | "finished"; host: string; game_id: string | null; round: number;
 }
 

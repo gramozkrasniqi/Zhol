@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { BOARDS } from "./games";
 import type { SeatInfo } from "./games/types";
-import { api, sb, START_ELO, type Table } from "./lib";
+import { api, chips, sb, START_ELO, type Table } from "./lib";
 
 interface GameRow {
   id: string; public: { turn?: number }; turn_deadline: string | null; finished_at: string | null;
@@ -95,7 +95,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     return (
       <section className="panel col center">
         <h2>{mod?.name ?? table.game} · {table.ranked ? "rankad match" : "privat bord"}</h2>
-        <p className="muted">{variant}</p>
+        <p className="muted">{variant}{table.stake > 0 && ` · insats ${chips(table.stake)} marker, pott ${chips(table.stake * table.seats)}`}</p>
         {!table.ranked && <>
           <p>Skicka koden till dina vänner:</p>
           <button className="code" onClick={() => navigator.clipboard?.writeText(table.code).catch(() => {})}>{table.code}</button>
@@ -118,7 +118,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     <>
       <header className="bar">
         <button className="ghost" onClick={leave}>← Lobby</button>
-        <span className="muted">{mod?.name} · {variant} · {table.ranked ? "rankad" : `bord ${table.code}`} · runda {table.round}</span>
+        <span className="muted">{mod?.name} · {variant} · {table.ranked ? "rankad" : `bord ${table.code}`} · runda {table.round}{table.stake > 0 && ` · pott ${chips(table.stake * table.seats)}`}</span>
         {running && (confirmResign
           ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
           : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}
