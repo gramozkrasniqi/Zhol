@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string;
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// The publishable key is meant to be public; access is enforced by RLS and the edge function.
+const url = (import.meta.env.VITE_SUPABASE_URL as string) || "https://cbyljdubmeizwzinqtrd.supabase.co";
+const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || "sb_publishable_kpNg3bBBtp2-n_mW1odRlA_ZwA-T38P";
 export const configured = Boolean(url && key);
 export const sb = createClient(url || "http://localhost", key || "missing");
 
