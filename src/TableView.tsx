@@ -94,9 +94,9 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
 
   if (table.status === "waiting" || !game) {
     return (
-      <section className="panel col center">
-        <h2>{mod?.name ?? table.game} · {table.ranked ? "rankad match" : "privat bord"}</h2>
-        <p className="muted">{variant}{table.stake > 0 && ` · insats ${chips(table.stake)} marker, pott ${chips(table.stake * table.seats)}`}</p>
+      <section className="panel col center waiting-room">
+        <h2>{table.ranked ? "Rankad match" : "Privat bord"} i {mod?.name ?? table.game}</h2>
+        <p className="muted">{variant}{table.stake > 0 && `, insats ${chips(table.stake)} marker, pott ${chips(table.stake * table.seats)}`}</p>
         {!table.ranked && <>
           <p>Skicka koden till dina vänner:</p>
           <button className="code" onClick={() => navigator.clipboard?.writeText(table.code).catch(() => {})}>{table.code}</button>
@@ -122,7 +122,12 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     <>
       <header className="bar">
         <button className="ghost" onClick={leave}>← Lobby</button>
-        <span className="muted">{mod?.name} · {variant} · {table.ranked ? "rankad" : `bord ${table.code}`} · runda {table.round}{table.stake > 0 && ` · pott ${chips(table.stake * table.seats)}`}</span>
+        <span className="tags">
+          <span className="tag">{variant}</span>
+          <span className="tag">{table.ranked ? "Rankad" : `Bord ${table.code}`}</span>
+          <span className="tag">Runda {table.round}</span>
+          {table.stake > 0 && <span className="tag gold">Pott {chips(table.stake * table.seats)}</span>}
+        </span>
         {running && (confirmResign
           ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
           : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}

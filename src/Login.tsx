@@ -1,5 +1,18 @@
-import { useState } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
+import { CardView } from "./games/zhol/Card";
 import { sb } from "./lib";
+
+const FAN = [
+  { id: 1, r: 1, s: 1 }, { id: 2, r: 13, s: 0 }, { id: 3, j: 1 as const }, { id: 4, r: 12, s: 2 }, { id: 5, r: 11, s: 3 },
+];
+
+export function Fan({ small }: { small?: boolean }) {
+  return (
+    <div className={`fan ${small ? "small" : ""}`} aria-hidden="true">
+      {FAN.map((c, i) => <div key={c.id} className="fan-card" style={{ "--i": i - 2 } as CSSProperties}><CardView c={c} /></div>)}
+    </div>
+  );
+}
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -7,7 +20,7 @@ export function Login() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function send(e: React.FormEvent) {
+  async function send(e: FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } });
@@ -19,19 +32,26 @@ export function Login() {
     setBusy(true); setErr("");
     const { error } = await sb.auth.signInAnonymously();
     setBusy(false);
-    if (error) setErr("Gästinloggning är inte aktiverad i Supabase.");
+    if (error) setErr("Gästinloggning är inte påslagen. Logga in med e-post i stället.");
   }
 
   return (
-    <main className="wrap login">
-      <h1 className="logo">Zhol</h1>
-      <p className="lead">Loja shqiptare me letra – spela med vänner eller mot folk på din nivå.</p>
-      {sent ? <p className="panel">Kolla din e-post – vi har skickat en inloggningslänk till <b>{email}</b>.</p> : (
-        <form className="panel col" onSubmit={send}>
+    <main className="login">
+      <div className="login-art">
+        <Fan />
+        <h1 className="wordmark big">Zhol</h1>
+        <p className="lead">Loja shqiptare me letra. Spela med vänner, mot folk på din nivå eller mot botar – när som helst.</p>
+      </div>
+      <div className="qilim" aria-hidden="true" />
+      {sent ? (
+        <p className="panel login-box">Kolla din e-post. Inloggningslänken är skickad till <b>{email}</b>.</p>
+      ) : (
+        <form className="panel login-box col" onSubmit={send}>
+          <button type="button" className="primary big" disabled={busy} onClick={guest}>Spela direkt som gäst</button>
+          <div className="or"><span>eller spara ditt konto</span></div>
           <label htmlFor="em">E-post</label>
           <input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@exempel.se" />
-          <button className="primary" disabled={busy}>Skicka inloggningslänk</button>
-          <button type="button" className="ghost" disabled={busy} onClick={guest}>Spela som gäst</button>
+          <button className="ghost" disabled={busy}>Skicka inloggningslänk</button>
           {err && <p className="err">{err}</p>}
         </form>
       )}

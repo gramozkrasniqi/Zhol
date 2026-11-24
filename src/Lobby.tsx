@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { leagueOf } from "../supabase/functions/_shared/rating";
 import { api, chips, DAILY_CHIPS, sb, STAKES, START_ELO, swedishToday, type Profile, type Rating, type Table, type Wallet } from "./lib";
+import { Fan } from "./Login";
 
 type Row = Rating & { profiles: { username: string } };
 const BOT_FILL_AFTER = 20; // seconds of quick-match search before bots fill the table
@@ -93,6 +94,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   async function cancel() {
     window.clearInterval(poll.current);
     setSearching(false);
+    setWaitingTable(null);
     const { data } = await sb.from("tables").select("id").eq("host", uid).eq("status", "waiting").eq("ranked", true);
     for (const t of data ?? []) await run(() => api("leave_table", { tableId: t.id }));
   }
@@ -100,104 +102,154 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
   const elo = rating?.elo ?? START_ELO;
   const balance = wallet?.balance ?? 0;
   const dailyReady = wallet !== null && wallet.last_daily !== swedishToday();
-  const stakeLabel = (n: number) => (n === 0 ? "Gratis" : `${chips(n)} marker`);
+  const podium = top.slice(0, 3);
+  const rest = top.slice(3);
+
   return (
-    <>
-      <header className="bar">
-        <h1 className="logo">Zhol</h1>
-        <button className="ghost" onClick={() => sb.auth.signOut()}>Logga ut</button>
+    <div className="lobby">
+      <header className="topbar">
+        <span className="wordmark">Zhol</span>
+        <div className="topbar-right">
+          <span className="chip-pill" title="Dina marker"><i className="chip-ico" aria-hidden="true" />{chips(balance)}</span>
+          <details className="profile">
+            <summary aria-label="Profil">
+              <span className="avatar-sm">{(me?.username ?? "?").slice(0, 1).toUpperCase()}</span>
+            </summary>
+            <div className="profile-menu panel col">
+              <form className="col" onSubmit={(e) => { e.preventDefault(); run(() => api("set_username", { username: name })).then(load); }}>
+                <label htmlFor="un">Ditt namn vid bordet</label>
+                <input id="un" value={name} onChange={(e) => setName(e.target.value)} />
+                <button className="primary" disabled={!me || name === me.username}>Spara namn</button>
+              </form>
+              <button className="ghost" onClick={() => sb.auth.signOut()}>Logga ut</button>
+            </div>
+          </details>
+        </div>
       </header>
 
-      {me && (
-        <section className="panel me">
-          <div>
-            <div className="muted">Spelare</div>
-            <form className="row" onSubmit={(e) => { e.preventDefault(); run(() => api("set_username", { username: name })).then(load); }}>
-              <input aria-label="Användarnamn" value={name} onChange={(e) => setName(e.target.value)} />
-              {name !== me.username && <button className="ghost">Spara</button>}
-            </form>
+      <section className="hero">
+        <div className="hero-text">
+          <h1>Sätt dig vid bordet{me ? `, ${me.username}` : ""}.</h1>
+          <div className="standing">
+            <span className="badge league" data-league={leagueOf(elo)}>{leagueOf(elo)}</span>
+            <span><b>{elo}</b> Elo</span>
+            <span><b>{rating?.wins ?? 0}</b> vinster av {rating?.games ?? 0}</span>
           </div>
-          <div className="stat"><b>{elo}</b><span>{leagueOf(elo)} i {mod.name}</span></div>
-          <div className="stat"><b>{rating?.wins ?? 0}/{rating?.games ?? 0}</b><span>vinster</span></div>
-          <div className="stat"><b>{chips(balance)}</b><span>marker</span></div>
-        </section>
-      )}
+          {searching ? (
+            <div className="searching">
+              <span className="radar" aria-hidden="true" />
+              <p>Söker {seats - 1 === 1 ? "en motståndare" : `${seats - 1} motståndare`} nära {elo} Elo. Botar tar platserna om {Math.max(0, BOT_FILL_AFTER - waited)} sekunder.</p>
+              <div className="row">
+                <button className="primary" onClick={botsNow}>Spela mot botar nu</button>
+                <button className="ghost" onClick={cancel}>Avbryt</button>
+              </div>
+            </div>
+          ) : (
+            <div className="cta">
+              <button className="primary big" onClick={quick}>Snabbmatch</button>
+              <button className="ghost big" onClick={botsNow}>Mot botar</button>
+            </div>
+          )}
+          <p className="fine">Snabbmatch är rankad och ger Elo. Mot botar är gratis och orankat.</p>
+        </div>
+        <Fan />
+      </section>
+
       {dailyReady && (
-        <button className="primary daily" onClick={() => run(() => api("claim_daily")).then(load)}>
-          Hämta dagens {chips(DAILY_CHIPS)} gratis marker
+        <button className="daily" onClick={() => run(() => api("claim_daily")).then(load)}>
+          <i className="chip-ico" aria-hidden="true" /> Hämta dagens {chips(DAILY_CHIPS)} gratis marker
         </button>
       )}
+      {err && <p className="err">{err}</p>}
 
-      <section className="panel col">
-        <h2>Spela</h2>
+      <section className="setup panel">
+        <h2>Ditt bord</h2>
         {ids.length > 1 && (
           <div className="seg" role="radiogroup" aria-label="Spel">
             {ids.map((id) => <button key={id} role="radio" aria-checked={game === id} className={game === id ? "on" : ""} onClick={() => pickGame(id)}>{GAMES[id].name}</button>)}
           </div>
         )}
-        <div className="seg" role="radiogroup" aria-label="Variant">
-          {mod.variants.map((v) => (
-            <button key={v.id} role="radio" aria-checked={variant === v.id} className={variant === v.id ? "on" : ""} onClick={() => setVariant(v.id)}>{v.label}</button>
-          ))}
-        </div>
-        <div className="seg" role="radiogroup" aria-label="Insats per spelare">
-          {STAKES.map((n) => (
-            <button key={n} role="radio" aria-checked={stake === n} className={stake === n ? "on" : ""} disabled={n > balance} onClick={() => setStake(n)}>
-              {stakeLabel(n)}
-            </button>
-          ))}
-        </div>
-        {stake > 0 && <p className="muted">Insats {chips(stake)} per spelare – vinnaren tar hela potten.</p>}
-        <div className="seg" role="radiogroup" aria-label="Antal spelare">
-          {mod.seatOptions.map((n) => (
-            <button key={n} role="radio" aria-checked={seats === n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>{n} spelare</button>
-          ))}
-        </div>
-        {searching ? (
-          <div className="col">
-            <span className="pulse">Söker {seats - 1 === 1 ? "en motståndare" : `${seats - 1} motståndare`} nära {elo}… {waited > 0 && `(${waited} s – botar tar över efter ${BOT_FILL_AFTER} s)`}</span>
-            <div className="row">
-              <button className="primary" onClick={botsNow}>Spela mot botar direkt</button>
-              <button className="ghost" onClick={cancel}>Avbryt</button>
+        <div className="setup-grid">
+          <fieldset>
+            <legend>Variant</legend>
+            <div className="variants" role="radiogroup" aria-label="Variant">
+              {mod.variants.map((v) => {
+                const [title, sub] = v.label.split(" · ");
+                return (
+                  <button key={v.id} role="radio" aria-checked={variant === v.id} className={`variant ${variant === v.id ? "on" : ""}`} onClick={() => setVariant(v.id)}>
+                    <b>{title}</b><span>{sub}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-        ) : (
-          <div className="grid2">
-            <button className="primary big" onClick={quick}>Snabbmatch – rankad</button>
-            <button className="ghost big" onClick={botsNow}>Spela mot botar</button>
-          </div>
-        )}
-        <p className="muted">Mot botar är det gratis och orankat.</p>
+          </fieldset>
+          <fieldset>
+            <legend>Spelare</legend>
+            <div className="seats-pick" role="radiogroup" aria-label="Antal spelare">
+              {mod.seatOptions.map((n) => (
+                <button key={n} role="radio" aria-checked={seats === n} className={seats === n ? "on" : ""} onClick={() => setSeats(n)}>
+                  <span className="dots" aria-hidden="true">{Array.from({ length: n }, (_, i) => <i key={i} style={{ "--a": `${(i * 360) / n}deg` } as CSSProperties} />)}</span>
+                  <b>{n}</b>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Insats per spelare</legend>
+            <div className="chips" role="radiogroup" aria-label="Insats per spelare">
+              {STAKES.map((n) => (
+                <button key={n} role="radio" aria-checked={stake === n} className={`pchip v${n} ${stake === n ? "on" : ""}`} disabled={n > balance} onClick={() => setStake(n)}
+                  aria-label={n === 0 ? "Gratis" : `${chips(n)} marker`}>
+                  <span>{n === 0 ? "0" : n >= 1000 ? `${n / 1000}k` : n}</span>
+                </button>
+              ))}
+            </div>
+            <p className="fine">{stake === 0 ? "Gratis bord." : `Pott ${chips(stake * seats)} marker. Vinnaren tar allt.`}</p>
+          </fieldset>
+        </div>
       </section>
 
-      <section className="grid2">
-        <div className="panel col">
-          <h2>Med vänner</h2>
-          <p className="muted">Privat bord för {seats} spelare. Lediga platser kan fyllas med botar.</p>
+      <section className="duo">
+        <div className="panel col friends">
+          <h2>Spela med vänner</h2>
+          <p className="muted">Skapa ett privat bord för {seats} och dela koden. Tomma platser kan fyllas med botar.</p>
           <button className="primary" onClick={() => run(() => api<{ table: Table }>("create_table", { game, variant, seats, stake })).then((r) => r && onOpen(r.table.id))}>
             Skapa privat bord
           </button>
         </div>
         <form className="panel col" onSubmit={(e) => { e.preventDefault(); run(() => api<{ table: Table }>("join_table", { code })).then((r) => r && onOpen(r.table.id)); }}>
-          <h2>Har du en kod?</h2>
-          <input aria-label="Bordskod" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="K7P2QX" maxLength={6} />
-          <button className="primary" disabled={code.length !== 6}>Gå med</button>
+          <h2>Har du fått en kod?</h2>
+          <input className="code-input" aria-label="Bordskod" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="K7P2QX" maxLength={6} />
+          <button className="primary" disabled={code.length !== 6}>Gå med i bordet</button>
         </form>
       </section>
-      {err && <p className="err">{err}</p>}
 
-      <section className="panel">
-        <h2>Topplista · {mod.name}</h2>
+      <section className="panel leaders">
+        <h2>Bästa spelarna i {mod.name}</h2>
         {top.length ? (
-          <table className="board">
-            <thead><tr><th>#</th><th>Spelare</th><th>Liga</th><th className="num">Elo</th></tr></thead>
-            <tbody>{top.map((p, i) => (
-              <tr key={p.user_id} className={p.user_id === uid ? "mine" : ""}><td>{i + 1}</td><td>{p.profiles.username}</td><td>{leagueOf(p.elo)}</td><td className="num">{p.elo}</td></tr>
-            ))}</tbody>
-          </table>
-        ) : <p className="muted">Ingen har spelat än. Bli först på listan.</p>}
+          <>
+            <ol className="podium">
+              {podium.map((p, i) => (
+                <li key={p.user_id} className={`place p${i + 1} ${p.user_id === uid ? "mine" : ""}`}>
+                  <span className="avatar-sm">{p.profiles.username.slice(0, 1).toUpperCase()}</span>
+                  <b className="nm">{p.profiles.username}</b>
+                  <span className="elo-n">{p.elo}</span>
+                  <span className="step" aria-hidden="true">{i + 1}</span>
+                </li>
+              ))}
+            </ol>
+            {rest.length > 0 && (
+              <table className="board">
+                <thead><tr><th>Plats</th><th>Spelare</th><th>Liga</th><th className="num">Elo</th></tr></thead>
+                <tbody>{rest.map((p, i) => (
+                  <tr key={p.user_id} className={p.user_id === uid ? "mine" : ""}><td>{i + 4}</td><td>{p.profiles.username}</td><td>{leagueOf(p.elo)}</td><td className="num">{p.elo}</td></tr>
+                ))}</tbody>
+              </table>
+            )}
+          </>
+        ) : <p className="muted">Ingen har spelat en rankad match än. Vinn en snabbmatch så hamnar du först här.</p>}
       </section>
-      <p className="muted center">Markerna är låtsaspengar. De har inget värde och kan inte växlas in eller föras över.</p>
-    </>
+      <p className="fine center">Markerna är låtsaspengar. De har inget värde och kan inte växlas in eller föras över.</p>
+    </div>
   );
 }
