@@ -98,6 +98,15 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     setErr("");
     try { await api("next_round", { tableId }); await load(); } catch (e) { setErr((e as Error).message); }
   }
+  const canFullscreen = typeof document !== "undefined" && !!document.fullscreenEnabled;
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      await document.documentElement.requestFullscreen();
+      // Android lets a full-screen page turn sideways for a bigger table; other systems ignore it
+      await (screen.orientation as any)?.lock?.("landscape");
+    } catch { /* not allowed here */ }
+  }
   async function leave() {
     if (table?.status !== "playing") { try { await api("leave_table", { tableId }); } catch { /* already gone */ } }
     onLeave();
@@ -119,6 +128,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
         </>}
         <p>{seats.length} av {table.seats} spelare: {seats.map((s) => s.username).join(", ")}</p>
         <p className="pulse">Väntar på spelare…</p>
+        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label="Helskärm">⛶</button>}
         <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         <div className="row">
           <button className="primary" onClick={() => api("fill_bots", { tableId }).then(load).catch((e) => setErr(e.message))}>Fyll lediga platser med botar</button>
@@ -145,6 +155,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           <span className="tag">Runda {table.round}</span>
           {table.stake > 0 && <span className="tag gold">Pott {chips(table.stake * table.seats)} Lek</span>}
         </span>
+        {canFullscreen && <button className="ghost fs" onClick={toggleFullscreen} aria-label="Helskärm">⛶</button>}
         <TableChat tableId={tableId} uid={uid} seats={seats} onMessage={showBubble} />
         {running && (confirmResign
           ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
@@ -159,6 +170,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           <button className="primary" onClick={nextRound}>Ny runda</button>
         </div>
       )}
+      <p className="rotate-tip" aria-hidden="true">Vrid telefonen för ett större bord</p>
       {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit}
           timeLeft={running ? left : null} turnSeconds={TURN_SECONDS} pot={table.stake > 0 ? table.stake * table.seats : undefined} bubbles={bubbles}
           ranked={table.ranked} onLeave={leave} />

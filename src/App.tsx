@@ -4,10 +4,13 @@ import { configured, sb } from "./lib";
 import { Login } from "./Login";
 import { Lobby } from "./Lobby";
 import { TableView } from "./TableView";
+import { Rules } from "./Rules";
+import { Tutorial } from "./games/zhol/Tutorial";
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [page, setPage] = useState<"lobby" | "tutorial" | "rules">("lobby");
   const [tableId, setTableId] = useState<string | null>(() => {
     try { return localStorage.getItem("zhol.table"); } catch { return null; }
   });
@@ -30,7 +33,9 @@ export function App() {
     <main className="wrap">
       {tableId
         ? <TableView uid={session.user.id} tableId={tableId} onLeave={() => open(null)} />
-        : <Lobby uid={session.user.id} onOpen={open} />}
+        : page === "tutorial" ? <Tutorial onExit={() => setPage("lobby")} />
+        : page === "rules" ? <Rules onExit={() => setPage("lobby")} onTutorial={() => setPage("tutorial")} />
+        : <Lobby uid={session.user.id} onOpen={open} onTutorial={() => setPage("tutorial")} onRules={() => setPage("rules")} />}
     </main>
   );
 }

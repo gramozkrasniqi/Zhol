@@ -1,3 +1,4 @@
+import { tutorialDone } from "./games/zhol/Tutorial";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { leagueOf } from "../supabase/functions/_shared/rating";
@@ -8,7 +9,8 @@ import { Avatar, PRESETS, squareWebp } from "./Avatar";
 type Row = Rating & { profiles: { username: string; avatar: string | null } };
 const BOT_FILL_AFTER = 20; // seconds of quick-match search before bots fill the table
 
-export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => void }) {
+export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpen: (id: string) => void; onTutorial: () => void; onRules: () => void }) {
+  const newbie = !tutorialDone();
   const ids = Object.keys(GAMES);
   const [game, setGame] = useState(ids[0]);
   const mod = GAMES[game];
@@ -191,6 +193,9 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
             </div>
           )}
           <p className="fine">Snabbmatch är rankad och ger Elo. Mot botar är gratis och orankat.</p>
+          {newbie
+            ? <button className="learn" onClick={onTutorial}><b>Ny på Zhol?</b> Lär dig spela på två minuter</button>
+            : <p className="fine links"><button className="link" onClick={onRules}>Regler</button><button className="link" onClick={onTutorial}>Öva en runda</button></p>}
         </div>
         <Fan />
       </section>
