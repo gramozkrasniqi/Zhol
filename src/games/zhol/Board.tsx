@@ -20,7 +20,10 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const [order, setOrder] = useState<number[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  // The live drag is kept in a ref so fast pointer events never see a stale value
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (d: Drag | null) => { dragRef.current = d; setDragState(d); };
   const stockRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
   const handRef = useRef<HTMLDivElement>(null);
@@ -120,14 +123,18 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
     setDrag({ ...d, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false });
   }
   function moveDrag(e: RPointerEvent) {
-    if (!drag) return;
-    const moved = drag.moved || Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8;
-    setDrag({ ...drag, x: e.clientX, y: e.clientY, moved });
+    const d = dragRef.current;
+    if (!d) return;
+    const moved = d.moved || Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 8;
+    setDrag({ ...d, x: e.clientX, y: e.clientY, moved });
   }
   function endDrag(e: RPointerEvent) {
-    const d = drag;
+    const d0 = dragRef.current;
     setDrag(null);
-    if (!d || !d.moved) return;
+    if (!d0) return;
+    // A quick flick may end before any move event arrived: judge by where it ended
+    const d = { ...d0, moved: d0.moved || Math.hypot(e.clientX - d0.x0, e.clientY - d0.y0) > 8 };
+    if (!d.moved) return;
     suppressClick.current = true;
     window.setTimeout(() => { suppressClick.current = false; }, 0);
     const { clientX: x, clientY: y } = e;
