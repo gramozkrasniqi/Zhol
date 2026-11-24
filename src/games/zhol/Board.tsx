@@ -199,7 +199,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const over = ended || pub.phase === "over";
   const myTurn = !over && pub.turn === mySeat;
   const canWin = myTurn && pub.phase === "discard" && !!findWin(hand, pub.taken, pub.variant === "small");
-  const name = (seat: number) => seats.find((s) => s.seat === seat)?.username ?? "…";
+  const name = (seat: number) => (seats.find((s) => s.seat === seat)?.username ?? "…").replace(" (bot)", "");
   const drawOpen = myTurn && pub.phase === "draw" && !busy;
   const canThrow = (id: number) => myTurn && pub.phase === "discard" && !busy && id !== pub.taken;
   const newest = myTurn && pub.phase === "discard" ? sorted[sorted.length - 1]?.id : undefined;
