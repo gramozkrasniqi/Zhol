@@ -154,3 +154,18 @@ describe("större bord och botar", () => {
     expect(g.botMove!(s, 0)).toEqual({ type: "zhol" });
   });
 });
+
+describe("draglogg för animationer", () => {
+  it("loggar drag, döljer kort från högen och visar kastade kort", () => {
+    let s = newGame("small", 2, 0);
+    const top = s.discard[0];
+    s = applyAction(s, 0, { type: "draw", from: "discard" });
+    s = applyAction(s, 0, { type: "discard", cardId: s.hands[0][0].id });
+    s = applyAction(s, 1, { type: "draw", from: "stock" });
+    const log = publicView(s).log;
+    expect(log.map((e) => [e.n, e.seat, e.kind, e.from])).toEqual([[1, 0, "draw", "discard"], [2, 0, "discard", undefined], [3, 1, "draw", "stock"]]);
+    expect(log[0].card?.id).toBe(top.id);
+    expect(log[1].card).toBeDefined();
+    expect(log[2].card).toBeUndefined();
+  });
+});

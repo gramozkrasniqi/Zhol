@@ -139,3 +139,17 @@ button[disabled]{opacity:.4;cursor:default}
   .room .hand{padding-top:22px}
   .bar>.ghost{padding:0 12px}
 }
+
+/* ---------- Dra och släpp, flygande kort ---------- */
+.room{position:relative}
+.room .hand .slot{display:inline-block;touch-action:none;transition:opacity .15s}
+.room .hand .slot+.slot{margin-left:clamp(calc(var(--cw) * -0.68), calc((100% - var(--n) * var(--cw)) / (var(--n) - 1)), 6px)}
+.room .hand .card+.card{margin-left:0}
+.room .hand .slot.lifted{opacity:.25}
+.room .hand.drop{outline:2px dashed #f2c14e;outline-offset:4px;border-radius:14px}
+.piles .pile{touch-action:none}
+.piles .pile.drop .card,.piles .pile.drop .empty{box-shadow:0 0 0 4px #f2c14e,0 0 24px #f2c14e}
+.ghost,.flying{position:fixed;left:0;top:0;pointer-events:none;z-index:50;--cw:clamp(48px,11.5vw,76px)}
+.ghost{transform:translate(-50%,-60%) rotate(-6deg) scale(1.08);filter:drop-shadow(0 12px 16px #000a)}
+.flying{will-change:transform}
+.hint{margin:8px 0 0;text-align:center;font-size:13px;color:#b9c4bf}

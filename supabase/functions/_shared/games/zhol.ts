@@ -18,7 +18,12 @@ export interface GameState {
   winner: number | null; // seat index, or -1 for a draw
   winGroups: Card[][] | null;
   moves: number;
+  log?: LogEntry[];
 }
+
+/** One move as everyone at the table may see it (a card drawn from the stock stays hidden). */
+export interface LogEntry { n: number; seat: number; kind: "draw" | "discard" | "zhol"; from?: "stock" | "discard"; card?: Card }
+const LOG_SIZE = 24;
 
 export type Action =
   | { type: "draw"; from: "stock" | "discard" }
@@ -55,7 +60,7 @@ export function newGame(variant: Variant, seats: number, starter = 0, rnd?: () =
   const discard = [stock.pop()!];
   return {
     variant, seats, stock, discard, hands, turn: starter % seats, phase: "draw",
-    taken: null, winner: null, winGroups: null, moves: 0,
+    taken: null, winner: null, winGroups: null, moves: 0, log: [],
   };
 }
 
@@ -138,6 +143,9 @@ export function applyAction(prev: GameState, seat: number, a: Action, rnd?: () =
   if (s.phase === "over") throw new MoveError("Spelet är slut");
   if (s.turn !== seat) throw new MoveError("Inte din tur");
   const hand = s.hands[seat];
+  const log = (e: Omit<LogEntry, "n" | "seat">) => {
+    s.log = [...(s.log ?? []), { n: s.moves + 1, seat, ...e }].slice(-LOG_SIZE);
+  };
 
   if (a.type === "draw") {
     if (s.phase !== "draw") throw new MoveError("Du har redan tagit ett kort");
@@ -158,12 +166,15 @@ export function applyAction(prev: GameState, seat: number, a: Action, rnd?: () =
     }
     hand.push(c);
     s.phase = "discard";
+    log({ kind: "draw", from: a.from, card: a.from === "discard" ? c : undefined });
   } else if (a.type === "discard") {
     if (s.phase !== "discard") throw new MoveError("Ta ett kort först");
     if (a.cardId === s.taken) throw new MoveError("Kortet du just tog får inte kastas direkt");
     const i = hand.findIndex((c) => c.id === a.cardId);
     if (i < 0) throw new MoveError("Kortet finns inte i din hand");
-    s.discard.push(hand.splice(i, 1)[0]);
+    const thrown = hand.splice(i, 1)[0];
+    s.discard.push(thrown);
+    log({ kind: "discard", card: thrown });
     s.turn = (s.turn + 1) % s.seats;
     s.phase = "draw";
     s.taken = null;
@@ -176,6 +187,7 @@ export function applyAction(prev: GameState, seat: number, a: Action, rnd?: () =
     s.phase = "over";
     s.winner = seat;
     s.winGroups = w.groups;
+    log({ kind: "zhol", card: w.discard });
   } else throw new MoveError("Okänt drag");
 
   s.moves++;
@@ -187,14 +199,14 @@ export interface PublicState {
   variant: Variant; seats: number; turn: number; phase: Phase;
   discardTop: Card | null; discardCount: number; stockCount: number;
   handCounts: number[]; taken: number | null; winner: number | null;
-  winGroups: Card[][] | null; moves: number;
+  winGroups: Card[][] | null; moves: number; log: LogEntry[];
 }
 export function publicView(s: GameState): PublicState {
   return {
     variant: s.variant, seats: s.seats, turn: s.turn, phase: s.phase,
     discardTop: s.discard[s.discard.length - 1] ?? null, discardCount: s.discard.length,
     stockCount: s.stock.length, handCounts: s.hands.map((h) => h.length),
-    taken: s.taken, winner: s.winner, winGroups: s.winGroups, moves: s.moves,
+    taken: s.taken, winner: s.winner, winGroups: s.winGroups, moves: s.moves, log: s.log ?? [],
   };
 }
 
