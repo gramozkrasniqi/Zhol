@@ -1,7 +1,7 @@
 import type { Card } from "../../../supabase/functions/_shared/games/zhol";
 
 const SU = ["♠︎", "♥︎", "♦︎", "♣︎"];
-const NAMES = ["spathi", "kupa", "karo", "maç"];
+const NAMES = ["spader", "hjärter", "ruter", "klöver"];
 export const rankLabel = (r: number) => ({ 1: "A", 11: "J", 12: "Q", 13: "K" } as Record<number, string>)[r] ?? String(r);
 
 export function CardView({ c, selected, fresh, onClick }: { c: Card; selected?: boolean; fresh?: boolean; onClick?: () => void }) {
