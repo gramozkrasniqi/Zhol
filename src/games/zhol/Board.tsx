@@ -72,10 +72,10 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
             ) : (
               <div className="piles">
                 <button className={`pile ${drawOpen ? "go" : ""}`} disabled={!drawOpen} onClick={() => act({ type: "draw", from: "stock" })} aria-label={`Högen, ${pub.stockCount} kort`}>
-                  <Back label={pub.stockCount} /><span>Högen</span>
+                  <Back label={pub.stockCount} /><span className="lbl">Högen</span>
                 </button>
                 <button className={`pile ${drawOpen && pub.discardTop ? "go" : ""}`} disabled={!drawOpen || !pub.discardTop} onClick={() => act({ type: "draw", from: "discard" })} aria-label="Kasthögen">
-                  {pub.discardTop ? <CardView c={pub.discardTop} /> : <span className="empty" />}<span>Kastat</span>
+                  {pub.discardTop ? <CardView c={pub.discardTop} /> : <span className="empty" />}<span className="lbl">Kastat</span>
                 </button>
               </div>
             )}
