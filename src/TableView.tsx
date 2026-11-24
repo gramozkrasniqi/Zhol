@@ -63,6 +63,13 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     }
   }, [tableId, uid, onLeave]);
 
+  // While a game is on screen the page is locked to the viewport: no scrolling during play
+  const inGame = !!table && table.status !== "waiting" && !!game;
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.toggle("in-game", inGame);
+    return () => el.classList.remove("in-game");
+  }, [inGame]);
   useEffect(() => {
     load();
     const ch = sb.channel(`table-${tableId}`)

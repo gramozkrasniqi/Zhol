@@ -533,3 +533,52 @@ button:not([disabled]):active{transform:scale(.97)}
 .roundboard .row{display:flex;justify-content:center;gap:8px;position:sticky;bottom:-14px;padding:10px 0 4px;background:linear-gradient(transparent,#24170f 30%)}
 .roundboard .fine{text-align:center;margin:8px 0 0}
 @media(max-width:640px){.roundboard li{grid-template-columns:1fr 38px 38px}.roundboard .loose{grid-column:1/-1;order:5}}
+
+/* =========================================================================
+   In a game: the whole table fits the screen – no scrolling while playing.
+   The page is locked to the visible viewport (dvh follows the mobile browser
+   bars), the table takes whatever height is left after the top bar and the hand.
+   ========================================================================= */
+html.in-game,html.in-game body{height:100%;overflow:hidden;overscroll-behavior:none}
+.in-game .wrap{height:100vh;height:100dvh;max-width:1180px;gap:clamp(4px,1vh,10px);
+  padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+.in-game .bar,.in-game .banner,.in-game .err{flex:none}
+.in-game .banner{padding:8px 12px}
+.in-game .rotate-tip{display:none}
+.in-game .room{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  padding:clamp(4px,1.4vh,16px) clamp(6px,1.6vw,16px) clamp(4px,1.2vh,12px)}
+.in-game .poker{flex:1 1 auto;min-height:0;height:auto;max-height:none;aspect-ratio:auto;width:100%;
+  max-width:calc((100dvh - 200px) * 2.1);margin:0 auto}
+.in-game .room .hand{flex:none;--cw:min(clamp(40px,11.5vw,78px),12.5dvh);padding:clamp(8px,2.2vh,18px) 4px 2px;margin:0}
+.in-game .handbar{flex:none;margin-top:clamp(4px,1vh,10px);flex-wrap:nowrap}
+.in-game .room .hint{flex:none;margin-top:clamp(2px,.6vh,6px)}
+.in-game .piles{--cw:min(clamp(40px,8vw,70px),11dvh)}
+@media (max-height:820px){.in-game .room .hint{display:none}}
+
+/* Phones upright */
+@media (max-width:640px){
+  .in-game .bar{gap:6px}
+  .in-game .bar button{min-height:36px;padding:0 10px;font-size:13px}
+  .in-game .tags .tag:not(.gold){display:none}
+  .in-game .room{border-radius:20px}
+  .in-game .handbar .progress{font-size:12px;gap:6px}
+  .in-game .handbar .meter{width:48px}
+  .in-game .handbar .tools button{min-height:36px;padding:0 12px;font-size:13px}
+  .in-game .poker{--rx:40%;--ry:45%}
+}
+/* Very short phones (small screens with the browser bars showing) */
+@media (max-width:640px) and (max-height:700px){
+  .in-game .seat{width:70px}
+  .in-game .avatar{width:38px;height:38px;font-size:14px}
+  .in-game .plate{padding:2px 5px 1px;min-width:60px}
+  .in-game .plate .nm{font-size:11px}
+  .in-game .plate .meta{font-size:10px}
+  .in-game .drink{width:26px}
+  .in-game .room .status{font-size:12px;padding:3px 10px}
+  .in-game .center{gap:4px}
+}
+/* Phones sideways: keep the hand next to the tools */
+@media (orientation:landscape) and (max-height:560px){
+  .in-game .room .hand{--cw:min(16dvh,74px);padding:6px 110px 0 4px}
+  .in-game .poker{max-width:none;--ry:41%;margin-top:6px}
+}
