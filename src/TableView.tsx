@@ -125,7 +125,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
       </header>
       {running && left !== null && turnSeat !== undefined && (
         <div className={`timer ${left <= 10 ? "low" : ""}`} role="timer" aria-live="off">
-          <span>{turnSeat === mySeat ? "Din tur" : `${nameOf(turnSeat)}s tur`}</span>
+          <span>{turnSeat === mySeat ? "Din tur" : `Tur: ${nameOf(turnSeat)}`}</span>
           <span className="bar-track"><span style={{ width: `${(left / 30) * 100}%` }} /></span>
           <b>{left} s</b>
         </div>
@@ -139,7 +139,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
           <button className="primary" onClick={nextRound}>Ny runda</button>
         </div>
       )}
-      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} />
+      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} ended={!!forfeit} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}
     </>

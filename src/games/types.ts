@@ -11,6 +11,8 @@ export interface BoardProps<P = unknown, H = unknown, A = unknown> {
   busy: boolean;
   act: (action: A) => void;
   nextRound: () => void;
+  /** True when the platform ended the game (someone gave up or timed out); the board just shows it. */
+  ended?: boolean;
 }
 
 export interface GameUI {

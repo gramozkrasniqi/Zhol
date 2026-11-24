@@ -3,7 +3,7 @@ import { findWin, type Action, type Card, type PublicState } from "../../../supa
 import type { BoardProps } from "../types";
 import { Back, CardView } from "./Card";
 
-export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound }: BoardProps<PublicState, Card[], Action>) {
+export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ended }: BoardProps<PublicState, Card[], Action>) {
   const [order, setOrder] = useState<number[]>([]);
   const [sel, setSel] = useState<number | null>(null);
 
@@ -18,7 +18,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound }: Bo
   }, [hand]);
   const sorted = useMemo(() => order.map((id) => hand.find((c) => c.id === id)!).filter(Boolean), [order, hand]);
 
-  const myTurn = pub.phase !== "over" && pub.turn === mySeat;
+  const myTurn = !ended && pub.phase !== "over" && pub.turn === mySeat;
   const canWin = myTurn && pub.phase === "discard" && !!findWin(hand, pub.taken, pub.variant === "small");
   const name = (seat: number) => seats.find((s) => s.seat === seat)?.username ?? "…";
   const drawOpen = myTurn && pub.phase === "draw" && !busy;
@@ -40,7 +40,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound }: Bo
     else setSel(sel === c.id ? null : c.id);
   }
 
-  const status = pub.phase === "over"
+  const status = ended ? "Partiet är slut." : pub.phase === "over"
     ? pub.winner === -1 ? "Högen tog slut – oavgjort." : pub.winner === mySeat ? "Zhol! Du vann." : `${name(pub.winner!)} gjorde Zhol.`
     : myTurn
       ? pub.phase === "draw" ? "Din tur – ta från högen eller kasthögen." : canWin ? "Du har Zhol! Tryck på knappen." : "Välj ett kort att kasta."
