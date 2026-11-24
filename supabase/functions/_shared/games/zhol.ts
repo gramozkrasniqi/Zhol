@@ -15,8 +15,8 @@ export const LIMIT = 101;
 export const CLOSE_BONUS = -20;       // the player who closes
 export const CLOSE_JOKER_BONUS = -40; // ...by throwing a xhol as the last card
 export const JOKER_POINTS = 20;
-/** Card value when it is left outside a group: 2–10 as written, J/Q/K 10, A 11, xhol 20. */
-export const cardPoints = (c: Card) => (c.j ? JOKER_POINTS : c.r === 1 ? 11 : Math.min(10, c.r!));
+/** Card value when it is left outside a group: 2–10 as written, A/K/Q/J 10 (as Pishp counts them), xhol 20. */
+export const cardPoints = (c: Card) => (c.j ? JOKER_POINTS : c.r === 1 ? 10 : Math.min(10, c.r!));
 
 export interface RoundResult {
   round: number;

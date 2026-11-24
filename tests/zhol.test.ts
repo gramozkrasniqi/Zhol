@@ -196,14 +196,14 @@ describe("botarnas skicklighet", () => {
 import { applyAction as act2, bestLock, cardPoints, forfeit, newGame as ng, zhol as Z, type GameState as GS } from "../supabase/functions/_shared/games/zhol";
 const PC = (r: number, s: number, id: number): Card => ({ id, r, s });
 describe("poängläge", () => {
-  it("kortvärden: 2–10 som skrivet, klädda 10, ess 11, xhol 20", () => {
-    expect([2, 7, 10, 11, 12, 13, 1].map((r) => cardPoints(PC(r, 0, r)))).toEqual([2, 7, 10, 10, 10, 10, 11]);
+  it("kortvärden: 2–10 som skrivet, ess och klädda 10, xhol 20", () => {
+    expect([2, 7, 10, 11, 12, 13, 1].map((r) => cardPoints(PC(r, 0, r)))).toEqual([2, 7, 10, 10, 10, 10, 10]);
     expect(cardPoints({ id: 99, j: 1 })).toBe(20);
   });
   it("bestLock låser så många poäng som möjligt", () => {
     const hand = [PC(5, 0, 1), PC(6, 0, 2), PC(7, 0, 3), PC(13, 1, 4), PC(13, 2, 5), PC(13, 3, 6), PC(2, 1, 7), PC(9, 2, 8), PC(1, 3, 9), PC(4, 1, 10)];
     const b = bestLock(hand, false);
-    expect(b.points).toBe(2 + 9 + 11 + 4);
+    expect(b.points).toBe(2 + 9 + 10 + 4);
     expect(b.groups.flat()).toHaveLength(6);
   });
   it("den som stänger får −20, andra får sina lösa kort, 101 åker ut, sista kvar vinner", () => {
