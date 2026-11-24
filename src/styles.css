@@ -56,3 +56,9 @@ button[disabled]{opacity:.4;cursor:default}
 .acts .zhol{background:var(--red);color:#fff;font-weight:800;font-size:18px;padding:0 22px}
 .acts .zhol:not([disabled]){animation:z 1.1s infinite}@keyframes z{50%{box-shadow:0 0 0 8px #d0142a44}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.timer{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.timer .bar-track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.timer .bar-track span{display:block;height:100%;background:var(--deep);transition:width 1s linear}
+.timer.low b,.timer.low .bar-track span{color:var(--red);background-color:var(--red)}
+.timer.low b{background:none}
+.banner{justify-content:space-between;font-weight:600}

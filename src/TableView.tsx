@@ -1,14 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
 import { BOARDS } from "./games";
 import type { SeatInfo } from "./games/types";
 import { api, sb, START_ELO, type Table } from "./lib";
 
+interface GameRow {
+  id: string; public: { turn?: number }; turn_deadline: string | null; finished_at: string | null;
+  outcome: { type: "forfeit"; seat: number; reason: "timeout" | "resign" } | null;
+}
+const CLAIM_AFTER_MS = 2000; // a little more than the server's grace, so claims are not rejected
+
 /** Platform shell around any game: waiting room, header, realtime sync, moves. */
 export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: string; onLeave: () => void }) {
   const [table, setTable] = useState<Table | null>(null);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
-  const [game, setGame] = useState<{ id: string; public: unknown } | null>(null);
+  const [game, setGame] = useState<GameRow | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [confirmResign, setConfirmResign] = useState(false);
   const [hand, setHand] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -24,7 +32,7 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     setSeats(players.map((x) => ({ user_id: x.user_id, seat: x.seat, username: x.profiles.username, elo: elo.get(x.user_id) ?? START_ELO })));
     if (t.game_id) {
       const [{ data: g }, { data: h }] = await Promise.all([
-        sb.from("games").select("id, public").eq("id", t.game_id).single(),
+        sb.from("games").select("id, public, turn_deadline, finished_at, outcome").eq("id", t.game_id).single(),
         sb.from("game_hands").select("cards").eq("game_id", t.game_id).eq("user_id", uid).maybeSingle(),
       ]);
       setGame(g);
@@ -42,6 +50,25 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [tableId, uid, load]);
+
+  // Clock for the countdown; when the current player's time is up, any client asks the server to move on
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const claiming = useRef(false);
+  useEffect(() => {
+    if (!game?.turn_deadline || game.finished_at || claiming.current) return;
+    if (now < new Date(game.turn_deadline).getTime() + CLAIM_AFTER_MS) return;
+    claiming.current = true;
+    api("claim_timeout", { gameId: game.id }).catch(() => {}).finally(() => { claiming.current = false; load(); });
+  }, [now, game, load]);
+
+  async function resign() {
+    if (!game) return;
+    setConfirmResign(false);
+    try { await api("resign", { gameId: game.id }); await load(); } catch (e) { setErr((e as Error).message); }
+  }
 
   async function act(action: unknown) {
     if (!game || busy) return;
@@ -81,13 +108,38 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
   }
 
   const mySeat = seats.find((s) => s.user_id === uid)?.seat ?? -1;
+  const nameOf = (seat: number) => (seat === mySeat ? "Du" : seats.find((s) => s.seat === seat)?.username ?? "…");
+  const running = !game.finished_at;
+  const left = game.turn_deadline ? Math.max(0, Math.ceil((new Date(game.turn_deadline).getTime() - now) / 1000)) : null;
+  const turnSeat = game.public.turn;
+  const forfeit = game.outcome?.type === "forfeit" ? game.outcome : null;
+
   return (
     <>
       <header className="bar">
         <button className="ghost" onClick={leave}>← Lobby</button>
         <span className="muted">{mod?.name} · {variant} · {table.ranked ? "rankad" : `bord ${table.code}`} · runda {table.round}</span>
+        {running && (confirmResign
+          ? <span className="row"><button className="primary" onClick={resign}>Ja, ge upp</button><button className="ghost" onClick={() => setConfirmResign(false)}>Avbryt</button></span>
+          : <button className="ghost" onClick={() => setConfirmResign(true)}>Ge upp</button>)}
       </header>
-      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy} act={act} nextRound={nextRound} />
+      {running && left !== null && turnSeat !== undefined && (
+        <div className={`timer ${left <= 10 ? "low" : ""}`} role="timer" aria-live="off">
+          <span>{turnSeat === mySeat ? "Din tur" : `${nameOf(turnSeat)}s tur`}</span>
+          <span className="bar-track"><span style={{ width: `${(left / 30) * 100}%` }} /></span>
+          <b>{left} s</b>
+        </div>
+      )}
+      {forfeit && (
+        <div className="panel row banner">
+          <span>
+            {forfeit.reason === "resign" ? `${nameOf(forfeit.seat)} gav upp.` : `${nameOf(forfeit.seat)} missade två turer i rad och förlorar.`}
+            {seats.length === 2 && ` ${nameOf(seats.find((s) => s.seat !== forfeit.seat)!.seat)} vinner.`}
+          </span>
+          <button className="primary" onClick={nextRound}>Ny runda</button>
+        </div>
+      )}
+      {Board ? <Board pub={game.public} hand={hand ?? []} mySeat={mySeat} seats={seats} busy={busy || !running} act={act} nextRound={nextRound} />
         : <p className="panel">Den här appversionen kan inte visa spelet. Ladda om sidan.</p>}
       {err && <p className="err">{err}</p>}
     </>

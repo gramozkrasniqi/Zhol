@@ -213,4 +213,12 @@ export const zhol: GameModule<GameState, Action, PublicState, Card[]> = {
   publicView,
   hands: (s) => s.hands,
   result: (s) => (s.phase === "over" ? { winner: s.winner ?? -1 } : null),
+  turn: (s) => (s.phase === "over" ? null : s.turn),
+  autoMove: (s, seat) => {
+    if (s.phase === "over" || s.turn !== seat) return null;
+    // Timed out: take from the stock, then throw back the newest card that may be thrown
+    if (s.phase === "draw") return { type: "draw", from: "stock" };
+    const pick = [...s.hands[seat]].reverse().find((c) => c.id !== s.taken)!;
+    return { type: "discard", cardId: pick.id };
+  },
 };

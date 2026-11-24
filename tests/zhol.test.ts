@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyAction, findGroups, newGame, publicView, MoveError, type Card,
 } from "../supabase/functions/_shared/games/zhol";
-import { eloDeltas, leagueOf } from "../supabase/functions/_shared/rating";
+import { eloDeltas, forfeitDeltas, leagueOf } from "../supabase/functions/_shared/rating";
 import { GAMES } from "../supabase/functions/_shared/games";
 
 let n = 1000;
@@ -89,5 +89,36 @@ describe("plattform", () => {
     expect(g.hands(s)).toHaveLength(2);
     expect(g.result(s)).toBeNull();
     expect(() => g.newGame("okänd", 2, 0)).toThrow();
+  });
+});
+
+describe("tidsgräns och avhopp", () => {
+  it("automatiskt drag tar från högen, kastar och lämnar turen", () => {
+    const g = GAMES.zhol;
+    let s = g.newGame("small", 2, 0);
+    const before = s.hands[0].map((c: Card) => c.id).sort();
+    for (let i = 0; i < 4 && g.turn(s) === 0; i++) s = g.applyAction(s, 0, g.autoMove(s, 0));
+    expect(g.turn(s)).toBe(1);
+    expect(s.hands[0].map((c: Card) => c.id).sort()).toEqual(before);
+  });
+  it("automatiskt drag kastar inte kortet man just tog", () => {
+    const g = GAMES.zhol;
+    let s = g.newGame("small", 2, 0);
+    const top = s.discard[0];
+    s = g.applyAction(s, 0, { type: "draw", from: "discard" });
+    const a = g.autoMove(s, 0);
+    expect(a.cardId).not.toBe(top.id);
+    s = g.applyAction(s, 0, a);
+    expect(g.turn(s)).toBe(1);
+  });
+  it("inget automatiskt drag när det inte är ens tur", () => {
+    const g = GAMES.zhol;
+    expect(g.autoMove(g.newGame("small", 2, 0), 1)).toBeNull();
+  });
+  it("den som ger upp förlorar mot alla, summan är noll", () => {
+    const d = forfeitDeltas([1200, 1200, 1200, 1200], 1);
+    expect(d[1]).toBeLessThan(0);
+    expect(d.reduce((a, b) => a + b, 0)).toBe(0);
+    expect(forfeitDeltas([1200, 1200], 0)).toEqual([-16, 16]);
   });
 });

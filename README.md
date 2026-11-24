@@ -8,6 +8,7 @@ Albanska kortspelet zhol online: spela med vänner via bordskod eller rankat mot
 - **Zhol** (`supabase/functions/_shared/games/zhol.ts`): Zhol i vogël (7 kort, 3+4) och Zhol i madh (2 lekar, 14 kort, grupper om minst 3), xhola, set och stegar (A låg eller hög, ingen K-A-2). Samma kod körs på servern och i appen. 15 tester.
 - **Server** (`supabase/functions/game`): alla drag kontrolleras på servern. Ingen kan se andras kort eller fuska med en ändrad app.
 - **Databas** (`supabase/migrations`): profiler med Elo, bord, spel, dolda händer (RLS) och Elo-historik.
+- **Tidsgräns:** 30 sekunder per tur. Går tiden ut spelar servern ett säkert drag åt spelaren. Två missade turer i rad, eller "Ge upp", räknas som förlust (även i Elo).
 - **App** (`src/`): inloggning med e-postlänk eller som gäst, lobby, snabbmatch (rankad 1 mot 1, matchning inom ±250 Elo), privata bord för 2 eller 4 med kod, spelbord i realtid och topplista med ligor (Brons, Silver, Guld, Platina, Diamant).
 
 ## Kom igång
@@ -28,11 +29,10 @@ npm run dev
 
 ## Nästa steg
 
-1. Tidsgräns per drag och automatisk förlust vid avhopp (krävs för rankade matcher).
-2. Låtsasmarker: saldo, insatsbord, dagliga gratismarker.
-3. Turneringar: inköp, utslagsträd och priser.
-4. Köp av marker (Stripe/App Store). Kräver juridisk kontroll först.
-5. Albanska och engelska i appen och PWA (installera på mobilen).
+1. Låtsasmarker: saldo, insatsbord, dagliga gratismarker.
+2. Turneringar: inköp, utslagsträd och priser.
+3. Köp av marker (Stripe/App Store). Kräver juridisk kontroll först.
+4. Albanska och engelska i appen och PWA (installera på mobilen).
 
 ## Lägga till ett nytt spel
 

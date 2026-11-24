@@ -14,6 +14,10 @@ export interface GameModule<S = unknown, A = unknown, P = unknown, H = unknown> 
   hands(state: S): H[];                         // private part per seat
   /** null while running; winner = seat index, or -1 for a draw */
   result(state: S): { winner: number } | null;
+  /** Whose turn it is, or null when the game is over. Drives the turn timer. */
+  turn(state: S): number | null;
+  /** One move the server plays for `seat` when its turn timer runs out (repeated until the turn passes). */
+  autoMove(state: S, seat: number): A | null;
 }
 
 /** Throw this (or a subclass) for an illegal move; its message is shown to the player. */

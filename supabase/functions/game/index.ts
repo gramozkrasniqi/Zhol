@@ -3,7 +3,7 @@
 // modified client cannot cheat or see other players' cards.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { GameError, getGame } from "../_shared/games/index.ts";
-import { eloDeltas } from "../_shared/rating.ts";
+import { eloDeltas, forfeitDeltas } from "../_shared/rating.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +16,10 @@ const json = (body: unknown, status = 200) =>
 class UserError extends Error {}
 const MATCH_WINDOW = 250; // accepted Elo difference in quick match
 const START_ELO = 1200;
+const TURN_SECONDS = 30;   // time per turn
+const GRACE_MS = 1500;     // slack for clock drift before a timeout may be claimed
+const MAX_STRIKES = 2;     // missed turns in a row before a player forfeits
+const deadlineFromNow = () => new Date(Date.now() + TURN_SECONDS * 1000).toISOString();
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -35,6 +39,8 @@ Deno.serve(async (req) => {
       case "leave_table": return json(await leaveTable(db, uid, b.tableId));
       case "next_round": return json(await nextRound(db, uid, b.tableId));
       case "move": return json(await move(db, uid, b.gameId, b.action));
+      case "claim_timeout": return json(await claimTimeout(db, uid, b.gameId));
+      case "resign": return json(await resign(db, uid, b.gameId));
       default: throw new UserError("Okänd åtgärd");
     }
   } catch (e) {
@@ -150,7 +156,9 @@ async function startGame(db: SupabaseClient, tableId: string) {
   const players = ok(await db.from("table_players").select("user_id, seat").eq("table_id", tableId).order("seat")) as { user_id: string; seat: number }[];
   const state = g.newGame(t.variant, t.seats, t.round % t.seats);
   const hands = g.hands(state);
-  const row = ok(await db.from("games").insert({ table_id: tableId, public: g.publicView(state), rated: t.ranked }).select().single());
+  const row = ok(await db.from("games").insert({
+    table_id: tableId, public: g.publicView(state), rated: t.ranked, turn_deadline: deadlineFromNow(),
+  }).select().single());
   ok(await db.from("game_secrets").insert({ game_id: row.id, state }));
   ok(await db.from("game_hands").insert(players.map((p) => ({ game_id: row.id, user_id: p.user_id, seat: p.seat, cards: hands[p.seat] }))));
   ok(await db.from("tables").update({ status: "playing", game_id: row.id, round: t.round + 1 }).eq("id", tableId));
@@ -170,34 +178,91 @@ async function nextRound(db: SupabaseClient, uid: string, tableId: string) {
   return { table: t };
 }
 
-async function move(db: SupabaseClient, uid: string, gameId: string, action: unknown) {
+type Outcome = { winner: number } | { forfeit: number; reason: "timeout" | "resign" };
+
+// deno-lint-ignore no-explicit-any
+async function loadGame(db: SupabaseClient, uid: string, gameId: string): Promise<any> {
   const hand = ok(await db.from("game_hands").select("seat").eq("game_id", gameId).eq("user_id", uid).maybeSingle());
   if (!hand) throw new UserError("Du är inte med i det här spelet");
-  const row = ok(await db.from("games").select("version, table_id, rated, tables(game)").eq("id", gameId).single());
-  const g = moduleFor(row.tables.game);
+  const row = ok(await db.from("games")
+    .select("version, table_id, rated, finished_at, turn_deadline, strikes, tables(game, seats)").eq("id", gameId).single());
   const sec = ok(await db.from("game_secrets").select("state").eq("game_id", gameId).single());
-  const next = g.applyAction(sec.state, hand.seat, action);
+  return { seat: hand.seat, row, g: moduleFor(row.tables.game), state: sec.state };
+}
 
+// deno-lint-ignore no-explicit-any
+async function persist(db: SupabaseClient, gameId: string, ctx: any, next: unknown, strikes: Record<string, number>, outcome: Outcome | null) {
+  const { row, g, state } = ctx;
+  const res = outcome ?? g.result(next);
+  const over = !!res;
+  const turnChanged = g.turn(next) !== g.turn(state);
+  const deadline = over ? null : turnChanged || !row.turn_deadline ? deadlineFromNow() : row.turn_deadline;
   ok(await db.rpc("save_game", {
     p_game: gameId, p_version: row.version, p_public: g.publicView(next), p_state: next,
     p_hands: g.hands(next).map((cards: unknown, seat: number) => ({ seat, cards })),
+    p_deadline: deadline, p_strikes: strikes,
+    p_outcome: outcome && "forfeit" in outcome ? { type: "forfeit", seat: outcome.forfeit, reason: outcome.reason } : null,
+    p_over: over,
   }));
-
-  const res = g.result(next);
   if (res) {
     ok(await db.from("tables").update({ status: "finished" }).eq("id", row.table_id));
-    await settle(db, gameId, row.table_id, row.tables.game, row.rated, res.winner);
+    await settle(db, gameId, row.table_id, row.tables.game, row.rated, res);
   }
+}
+
+async function move(db: SupabaseClient, uid: string, gameId: string, action: unknown) {
+  const ctx = await loadGame(db, uid, gameId);
+  if (ctx.row.finished_at) throw new UserError("Partiet är slut");
+  const next = ctx.g.applyAction(ctx.state, ctx.seat, action);
+  await persist(db, gameId, ctx, next, { ...ctx.row.strikes, [ctx.seat]: 0 }, null);
   return { ok: true };
 }
 
-async function settle(db: SupabaseClient, gameId: string, tableId: string, game: string, rated: boolean, winner: number) {
+/** Any player at the table may call this once the current player's time is up. */
+async function claimTimeout(db: SupabaseClient, uid: string, gameId: string) {
+  const ctx = await loadGame(db, uid, gameId);
+  const { row, g } = ctx;
+  if (row.finished_at) return { ok: true };
+  if (!row.turn_deadline || Date.now() < new Date(row.turn_deadline).getTime() + GRACE_MS) throw new UserError("Tiden är inte slut än");
+  const seat = g.turn(ctx.state);
+  if (seat === null) return { ok: true };
+  const strikes = { ...row.strikes, [seat]: (row.strikes?.[seat] ?? 0) + 1 };
+  if (strikes[seat] >= MAX_STRIKES) {
+    await persist(db, gameId, ctx, ctx.state, strikes, { forfeit: seat, reason: "timeout" });
+    return { forfeit: seat };
+  }
+  let next = ctx.state;
+  for (let i = 0; i < 6 && g.turn(next) === seat; i++) {
+    const a = g.autoMove(next, seat);
+    if (!a) break;
+    next = g.applyAction(next, seat, a);
+  }
+  await persist(db, gameId, ctx, next, strikes, null);
+  return { auto: seat };
+}
+
+async function resign(db: SupabaseClient, uid: string, gameId: string) {
+  const ctx = await loadGame(db, uid, gameId);
+  if (ctx.row.finished_at) return { ok: true };
+  await persist(db, gameId, ctx, ctx.state, ctx.row.strikes, { forfeit: ctx.seat, reason: "resign" });
+  return { ok: true };
+}
+
+async function settle(db: SupabaseClient, gameId: string, tableId: string, game: string, rated: boolean, res: Outcome) {
   const players = ok(await db.from("table_players").select("user_id, seat").eq("table_id", tableId).order("seat")) as { user_id: string; seat: number }[];
   const uids = players.map((p) => p.user_id);
   const rows = ok(await db.from("ratings").select().eq("game", game).in("user_id", uids)) as { user_id: string; elo: number; games: number; wins: number }[];
   const cur = new Map(rows.map((r) => [r.user_id, r]));
   const before = players.map((p) => cur.get(p.user_id)?.elo ?? START_ELO);
-  const deltas = rated ? eloDeltas(before, winner) : players.map(() => 0);
+  // Two players: a forfeit is simply a win for the other one
+  let winner = "winner" in res ? res.winner : players.length === 2 ? players.find((p) => p.seat !== res.forfeit)!.seat : -1;
+  const idx = (seat: number) => players.findIndex((p) => p.seat === seat);
+  let deltas = players.map(() => 0);
+  if (rated) {
+    if (winner >= 0) deltas = eloDeltas(before, idx(winner));
+    else if ("forfeit" in res) deltas = forfeitDeltas(before, idx(res.forfeit));
+  }
+  if (winner >= 0 && idx(winner) < 0) winner = -1;
   const upserts = players.map((p, i) => ({
     user_id: p.user_id, game, elo: before[i] + deltas[i],
     games: (cur.get(p.user_id)?.games ?? 0) + 1,

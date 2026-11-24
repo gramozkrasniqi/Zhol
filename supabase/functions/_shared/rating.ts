@@ -15,6 +15,20 @@ export function eloDeltas(ratings: number[], winner: number): number[] {
   return d;
 }
 
+/** Elo change when `loser` forfeits (gives up or times out): they lose to every other player. */
+export function forfeitDeltas(ratings: number[], loser: number): number[] {
+  const d = ratings.map(() => 0);
+  const k = K_FACTOR / Math.max(1, ratings.length - 1);
+  for (let i = 0; i < ratings.length; i++) {
+    if (i === loser) continue;
+    const exp = 1 / (1 + 10 ** ((ratings[loser] - ratings[i]) / 400));
+    const ch = Math.round(k * (1 - exp));
+    d[i] += ch;
+    d[loser] -= ch;
+  }
+  return d;
+}
+
 export const LEAGUES = [
   { name: "Brons", min: 0 },
   { name: "Silver", min: 1100 },
