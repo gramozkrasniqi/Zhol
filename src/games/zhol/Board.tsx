@@ -56,11 +56,11 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   const myDrawLandedAt = useRef(0);
   useEffect(() => {
     const ids = new Set(hand.map((c) => c.id));
-    if (knownIds.current && Date.now() - myDrawLandedAt.current > 1500) {
+    if (knownIds.current && Date.now() - myDrawLandedAt.current > 4000) {
       const fresh = hand.filter((c) => !knownIds.current!.has(c.id)).map((c) => c.id);
       if (fresh.length && fresh.length < 3) {
         setArriving((a) => new Set([...a, ...fresh]));
-        window.setTimeout(() => setArriving((a) => { const n = new Set(a); fresh.forEach((id) => n.delete(id)); return n; }), 3500);
+        window.setTimeout(() => setArriving((a) => { const n = new Set(a); fresh.forEach((id) => n.delete(id)); return n; }), 2500);
       }
     }
     knownIds.current = ids;
@@ -389,7 +389,7 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
         ))}
       </div>
       <div className="handbar">
-        <span className="progress" aria-live="polite">
+        <span className={`progress ${over ? "off" : ""}`} aria-live="polite">
           <span className="meter" style={{ "--v": inGroups / needed } as CSSProperties}><i /></span>
           {over ? "" : inGroups === 0 ? "Inga färdiga grupper än" : `${inGroups} av ${needed} kort i färdiga grupper`}
         </span>

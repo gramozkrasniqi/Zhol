@@ -346,7 +346,7 @@ fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px
 .handbar .tools{display:flex;gap:8px}
 .handbar .tools button{background:#ffffff14;color:#fff;border:1px solid #ffffff1f}
 .handbar .tools em{font-style:normal;color:var(--brass);margin-left:6px}
-.room .hand .slot.ready .card{box-shadow:0 0 0 2px var(--brass),-3px 5px 12px #000a}
+.room .hand .slot.ready .card{background:linear-gradient(170deg,#fffaf0,#f6e2b4);box-shadow:0 0 0 3px var(--brass),0 0 14px #e6b55c88,-3px 5px 12px #000a}
 .room .hand .slot.ready .card::before{content:'';position:absolute;left:12%;right:12%;bottom:-7px;height:3px;border-radius:2px;background:var(--brass)}
 .zhol-call{font-family:var(--display);font-weight:800;font-size:clamp(20px,3.4vw,30px);padding:10px 34px;border-radius:999px;border:0;color:#fff;
   background:linear-gradient(180deg,#ee3a55,#a8122f);box-shadow:0 0 0 4px #e6b55c,0 10px 30px #d21c3a99;animation:call 1s ease-in-out infinite}
@@ -373,3 +373,5 @@ fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px
   box-shadow:0 3px 6px #0008;animation:pay .9s cubic-bezier(.5,0,.3,1) both}
 @keyframes pay{from{left:50%;top:50%;opacity:1}to{left:calc(50% + var(--c) * var(--rx));top:calc(50% + var(--s) * var(--ry));opacity:0}}
 @media (prefers-reduced-motion: reduce){.confetti,.paychip{display:none}.win-groups .deal,.finale-card h3,.zhol-call{animation:none}}
+
+.progress.off{visibility:hidden}
