@@ -129,7 +129,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
 
       <section className="hero">
         <div className="hero-text">
-          <h1>Sätt dig vid bordet{me ? `, ${me.username}` : ""}.</h1>
+          <h1>Sätt dig vid bordet.</h1>
           <div className="standing">
             <span className="badge league" data-league={leagueOf(elo)}>{leagueOf(elo)}</span>
             <span><b>{elo}</b> Elo</span>
@@ -154,6 +154,7 @@ export function Lobby({ uid, onOpen }: { uid: string; onOpen: (id: string) => vo
         </div>
         <Fan />
       </section>
+      <div className="qilim" aria-hidden="true" />
 
       {dailyReady && (
         <button className="daily" onClick={() => run(() => api("claim_daily")).then(load)}>
