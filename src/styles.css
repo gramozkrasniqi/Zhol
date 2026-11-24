@@ -410,9 +410,11 @@ fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px
   .bar .tags{display:none}
   .bar button{min-height:32px;padding:0 12px;font-size:13px}
   .room{padding:2px 8px 4px;border-radius:18px}
-  .poker{aspect-ratio:auto;width:100%;height:calc(100svh - 64px - min(16svh,74px) * 1.42 - 24px);min-height:150px;max-height:none;--rx:45%;--ry:41%}
+  .poker{aspect-ratio:auto;width:100%;height:calc(100svh - 64px - min(16svh,74px) * 1.42 - 24px);min-height:150px;max-height:none;--rx:46%;--ry:47%}
+  .seat.me{display:none}
+  .seat .meta{display:none}
   .tut .poker{height:calc(100svh - 104px - min(16svh,74px) * 1.42 - 24px)}
-  .rail{inset:12% 15%}
+  .rail{inset:17% 12% 6%}
   .seat{width:84px}
   .avatar{width:38px;height:38px;font-size:15px}
   .plate{min-width:64px;padding:2px 6px}
