@@ -156,9 +156,9 @@ fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px
 .place .nm{font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .place .elo-n{font-family:var(--display);font-size:14px;color:var(--rose)}
 .place .step{width:100%;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:22px;border-radius:12px 12px 4px 4px;color:#2a0a17}
-.place.p1{order:2}.place.p1 .step{height:92px;background:linear-gradient(180deg,#fff1cf,var(--brass))}
-.place.p2{order:1}.place.p2 .step{height:66px;background:linear-gradient(180deg,#f2f4f7,#a9b0ba)}
-.place.p3{order:3}.place.p3 .step{height:48px;background:linear-gradient(180deg,#f0c6a3,#a8673d)}
+.place.p1{grid-column:2;grid-row:1}.place.p1 .step{height:92px;background:linear-gradient(180deg,#fff1cf,var(--brass))}
+.place.p2{grid-column:1;grid-row:1}.place.p2 .step{height:66px;background:linear-gradient(180deg,#f2f4f7,#a9b0ba)}
+.place.p3{grid-column:3;grid-row:1}.place.p3 .step{height:48px;background:linear-gradient(180deg,#f0c6a3,#a8673d)}
 .place.mine .nm{color:var(--brass)}
 .board{width:100%;border-collapse:collapse}
 .board td,.board th{padding:10px 6px;border-bottom:1px solid var(--line);text-align:left}
