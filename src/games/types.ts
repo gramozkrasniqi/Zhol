@@ -1,6 +1,7 @@
+export type Drink = "kafe" | "caj";
 import type { ComponentType } from "react";
 
-export interface SeatInfo { user_id: string; seat: number; username: string; elo: number; avatar?: string | null; botSkill?: number | null }
+export interface SeatInfo { user_id: string; seat: number; username: string; elo: number; avatar?: string | null; drink?: Drink | null; botSkill?: number | null }
 
 /** What the platform hands every game board. */
 export interface BoardProps<P = unknown, H = unknown, A = unknown> {

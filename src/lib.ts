@@ -6,7 +6,7 @@ const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || "sb_publishabl
 export const configured = Boolean(url && key);
 export const sb = createClient(url || "http://localhost", key || "missing");
 
-export interface Profile { id: string; username: string; avatar?: string | null }
+export interface Profile { id: string; username: string; avatar?: string | null; drink?: "kafe" | "caj" | null }
 export interface Rating { user_id: string; game: string; elo: number; games: number; wins: number }
 export const START_ELO = 1200;
 export const STAKES = [0, 100, 500, 1000];

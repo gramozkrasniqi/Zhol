@@ -1,3 +1,5 @@
+import { Eagle } from "./Eagle";
+import { DRINKS, DrinkIcon, drinkOf } from "../../Drink";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import { findWin, type Action, type Card, type LogEntry, type PublicState } from "../../../supabase/functions/_shared/games/zhol";
 import type { BoardProps } from "../types";
@@ -10,6 +12,12 @@ import { cardSound, setSound, soundOn } from "./sound";
 /** Where a seat sits around the oval. The player is always at the bottom; the radius lives in CSS. */
 function seatPosition(offset: number, total: number): CSSProperties {
   const angle = Math.PI / 2 + (offset * 2 * Math.PI) / total; // 90° = bottom, clockwise
+  return { "--c": Math.cos(angle).toFixed(3), "--s": Math.sin(angle).toFixed(3) } as CSSProperties;
+}
+
+/** Where a player's drink stands: on the table edge, a little to the player's right. */
+function drinkPosition(offset: number, total: number): CSSProperties {
+  const angle = Math.PI / 2 + (offset * 2 * Math.PI) / total - (total > 4 ? 0.22 : 0.3);
   return { "--c": Math.cos(angle).toFixed(3), "--s": Math.sin(angle).toFixed(3) } as CSSProperties;
 }
 
@@ -315,7 +323,8 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
   return (
     <section className="room" data-seats={total} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)}>
       <div className="poker">
-        <div className="rail"><div className="felt">
+        <div className="rail sofra"><div className="felt wood">
+          <Eagle />
           <div className="center">
             {pub.phase === "over" && pub.winGroups ? null : (
               <div className="piles">
@@ -371,6 +380,16 @@ export function ZholBoard({ pub, hand, mySeat, seats, busy, act, nextRound, ende
                   : <span className="elo">{s.elo} Elo, </span>}{pub.handCounts[s.seat] ?? 0} kort</span>
               </div>
               {offset !== 0 && <span className="minicards" aria-hidden="true">{Array.from({ length: Math.min(pub.handCounts[s.seat] ?? 0, 5) }, (_, i) => <i key={i} />)}</span>}
+            </div>
+          );
+        })}
+        {seats.map((s) => {
+          const offset = (s.seat - mySeat + total) % total;
+          const kind = drinkOf(s.drink, s.user_id);
+          return (
+            <div key={`d${s.seat}`} className={`drink ${kind} ${offset === 0 ? "me" : ""}`} style={drinkPosition(offset, total)}
+              title={offset === 0 ? DRINKS.find((d) => d.id === kind)!.label : undefined}>
+              <DrinkIcon kind={kind} steam={!over && pub.turn === s.seat} />
             </div>
           );
         })}

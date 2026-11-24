@@ -42,11 +42,14 @@ export function TableView({ uid, tableId, onLeave }: { uid: string; tableId: str
     const { data: t } = await sb.from("tables").select().eq("id", tableId).maybeSingle();
     if (!t) return onLeave();
     setTable(t);
-    const { data: p } = await sb.from("table_players").select("user_id, seat, profiles(username, avatar, is_bot, bot_skill)").eq("table_id", tableId).order("seat");
-    const players = (p ?? []) as unknown as { user_id: string; seat: number; profiles: { username: string; avatar: string | null; is_bot: boolean; bot_skill: number | null } }[];
+    const seatQuery = (cols: string) => sb.from("table_players").select(`user_id, seat, profiles(${cols})`).eq("table_id", tableId).order("seat");
+    let { data: p, error: pe } = await seatQuery("username, avatar, drink, is_bot, bot_skill");
+    // Older databases without the drink column: load the seats without it
+    if (pe) ({ data: p } = await seatQuery("username, avatar, is_bot, bot_skill"));
+    const players = (p ?? []) as unknown as { user_id: string; seat: number; profiles: { username: string; avatar: string | null; drink: "kafe" | "caj" | null; is_bot: boolean; bot_skill: number | null } }[];
     const { data: r } = await sb.from("ratings").select("user_id, elo").eq("game", t.game).in("user_id", players.map((x) => x.user_id));
     const elo = new Map((r ?? []).map((x) => [x.user_id, x.elo as number]));
-    setSeats(players.map((x) => ({ user_id: x.user_id, seat: x.seat, username: x.profiles.username, avatar: x.profiles.avatar, botSkill: x.profiles.is_bot ? x.profiles.bot_skill ?? 0.7 : null, elo: elo.get(x.user_id) ?? START_ELO })));
+    setSeats(players.map((x) => ({ user_id: x.user_id, seat: x.seat, username: x.profiles.username, avatar: x.profiles.avatar, drink: x.profiles.drink, botSkill: x.profiles.is_bot ? x.profiles.bot_skill ?? 0.7 : null, elo: elo.get(x.user_id) ?? START_ELO })));
     if (t.game_id) {
       const [{ data: g }, { data: h }] = await Promise.all([
         sb.from("games").select("id, public, turn_deadline, finished_at, outcome").eq("id", t.game_id).single(),

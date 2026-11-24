@@ -1,3 +1,4 @@
+import { DRINKS, DrinkIcon } from "./Drink";
 import { tutorialDone } from "./games/zhol/Tutorial";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { GAMES } from "../supabase/functions/_shared/games";
@@ -112,6 +113,15 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
     if (r) load();
   }
 
+  async function setDrink(value: "kafe" | "caj") {
+    const r = await run(async () => {
+      const { error } = await sb.from("profiles").update({ drink: value }).eq("id", uid);
+      if (error) throw new Error("Drycken kunde inte sparas");
+      return true;
+    });
+    if (r) load();
+  }
+
   async function upload(file: File | undefined) {
     if (!file) return;
     setUploading(true);
@@ -157,6 +167,17 @@ export function Lobby({ uid, onOpen, onTutorial, onRules }: { uid: string; onOpe
                   <input type="file" accept="image/*" onChange={(e) => upload(e.target.files?.[0])} disabled={uploading} />
                   {uploading ? "Laddar upp…" : "Ladda upp egen bild"}
                 </label>
+              </div>
+              <div className="col">
+                <span className="menu-label">Din dryck vid bordet</span>
+                <div className="drink-pick" role="radiogroup" aria-label="Välj dryck">
+                  {DRINKS.map((d) => (
+                    <button key={d.id} role="radio" aria-checked={(me?.drink ?? "kafe") === d.id}
+                      className={(me?.drink ?? "kafe") === d.id ? "on" : ""} onClick={() => setDrink(d.id)}>
+                      <DrinkIcon kind={d.id} size={40} /><span>{d.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <form className="col" onSubmit={(e) => { e.preventDefault(); run(() => api("set_username", { username: name })).then(load); }}>
                 <label htmlFor="un">Ditt namn vid bordet</label>

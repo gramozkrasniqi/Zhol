@@ -434,3 +434,72 @@ fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px
   .win-groups{--cw:clamp(28px,9svh,44px)}
   .chat{max-height:80svh}
 }
+
+/* =========================================================================
+   Sofra – a fresher, warmer look: an evening around the low wooden table.
+   Espresso and walnut instead of night-garnet, a lamp glow over the table,
+   the eagle burnt into the wood and a kafe or çaj at every place.
+   ========================================================================= */
+:root{
+  --night:#1e1512; --night2:#110b09; --panel:#ffffff0d; --line:#f4e6d21f;
+  --rose:#d9bfae; --muted:#d9bfae; --brass:#f0bd62; --brass2:#b07a2e;
+  --walnut:#5a3219; --oak:#b7773f;
+}
+body{background:
+  radial-gradient(1100px 620px at 50% -12%,#5a2e1a66 0%,transparent 62%),
+  radial-gradient(900px 600px at 105% 105%,#3b1a2455 0%,transparent 60%),
+  linear-gradient(#21170f,var(--night2));background-attachment:fixed}
+.panel{border-radius:24px;background:linear-gradient(180deg,#ffffff10,#ffffff07);box-shadow:0 1px 0 #ffffff12 inset,0 18px 40px -28px #000}
+button{border-radius:14px;transition:transform .12s,background-color .15s,box-shadow .15s}
+button:not([disabled]):active{transform:scale(.97)}
+.primary{background:linear-gradient(180deg,#ef3a55,#b8142f)}
+.ghost{border-color:#f4e6d233}
+.profile-menu,.chat{background:#2a1c16}
+
+/* The room: lamp light falling on a qilim rug, the sofra in the middle */
+.room{border-radius:30px;background:
+  radial-gradient(ellipse 70% 60% at 50% 42%,#f0a85a2e 0%,transparent 70%),
+  radial-gradient(ellipse at 50% 45%,#3a2418 0%,#1a110c 78%);
+  box-shadow:0 30px 60px -30px #000,inset 0 0 0 1px var(--line)}
+.room::before{content:'';position:absolute;inset:6% 4%;border-radius:40px;pointer-events:none;opacity:.10;
+  background-color:#8f1233;
+  background-image:linear-gradient(135deg,var(--brass) 25%,transparent 25%),linear-gradient(225deg,var(--brass) 25%,transparent 25%),
+    linear-gradient(315deg,var(--brass) 25%,transparent 25%),linear-gradient(45deg,var(--brass) 25%,transparent 25%);
+  background-size:26px 26px;background-position:-13px 0,-13px 0,0 0,0 0;
+  -webkit-mask:radial-gradient(ellipse at 50% 50%,#000 40%,transparent 72%);mask:radial-gradient(ellipse at 50% 50%,#000 40%,transparent 72%)}
+
+/* The low round table: walnut rim, oak top with growth rings and grain */
+.rail.sofra{padding:clamp(7px,1.3vw,13px);
+  background:radial-gradient(ellipse at 50% 30%,#8a5530 0%,#5a3219 55%,#341b0c 100%);
+  box-shadow:0 26px 40px -14px #000e,0 8px 0 #2a1408,0 10px 22px #0009,inset 0 2px 0 #ffffff26,inset 0 -4px 8px #0009}
+.felt.wood{overflow:hidden;
+  background:
+    radial-gradient(ellipse 60% 45% at 45% 30%,#fff3dc30 0%,transparent 70%),
+    repeating-radial-gradient(ellipse 120% 100% at 47% 54%,transparent 0 9px,#4a240d14 9px 10.5px,transparent 10.5px 17px,#4a240d0c 17px 18px),
+    repeating-linear-gradient(96deg,#ffffff07 0 1px,transparent 1px 4px,#00000008 4px 5px,transparent 5px 9px),
+    radial-gradient(ellipse at 50% 46%,#cf9157 0%,#b7773f 48%,#8a5128 100%);
+  box-shadow:inset 0 0 0 2px #2f170966,inset 0 0 0 5px #e7b07a22,inset 0 14px 34px #0005,inset 0 -10px 24px #0004}
+.felt.wood::before{inset:5%;border:2px solid #3b1a0a40;box-shadow:0 0 0 1px #f3c99133}
+.felt.wood::after{content:none}
+.eagle{position:absolute;left:50%;top:50%;width:min(62%,330px);height:auto;transform:translate(-50%,-52%);pointer-events:none;mix-blend-mode:multiply}
+.felt.wood .center{z-index:1}
+.felt.wood .piles .lbl{color:var(--ivory);font-weight:600;background:#1e120bb3;padding:1px 9px;border-radius:999px}
+.room .status{background:#1e120bcc;backdrop-filter:blur(4px);border:1px solid #ffffff14}
+.felt.wood .groups>div{background:#2a140940}
+
+/* Seats feel like cushions around the sofra */
+.avatar{background:linear-gradient(160deg,#5a3a2e,#24140f);box-shadow:0 0 0 3px #7a4e34,0 8px 16px #000a}
+.plate{background:#21140ef0;border-color:#f4e6d222;border-radius:12px}
+.seat.me .plate{background:#3a1f14;border-color:#f0bd6266}
+
+/* A kafe or çaj at every place */
+.drink{position:absolute;left:calc(50% + var(--c) * var(--rx) * .74);top:calc(50% + var(--s) * var(--ry) * .7);
+  transform:translate(-50%,-50%);z-index:1;pointer-events:none;width:clamp(34px,5.6vw,54px);filter:drop-shadow(0 3px 3px #0006)}
+.drink .drink-svg{width:100%;height:auto;display:block}
+.drink .steam path{animation:steam 2.4s ease-in-out infinite}
+.drink .steam path+path{animation-delay:1.2s}
+@keyframes steam{0%{opacity:0;transform:translateY(4px)}40%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+.drink-pick{display:flex;gap:8px}
+.drink-pick button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 6px;min-height:84px;border-radius:16px;background:#00000030;border:1px solid var(--line);font-size:13px}
+.drink-pick button.on{border-color:var(--brass);background:#f0bd621f;box-shadow:inset 0 0 0 1px var(--brass)}
+@media(max-width:640px){.drink{width:32px}.eagle{width:96%}}
